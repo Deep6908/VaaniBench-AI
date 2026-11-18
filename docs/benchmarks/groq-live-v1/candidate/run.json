@@ -1,0 +1,224 @@
+{
+  "format_version": "1.0",
+  "run_id": "b9a5154d18cc45f3b2198ab938dbeeac",
+  "started_at": "2026-11-18T14:56:54.484810+00:00",
+  "dataset_version": "0.1.0",
+  "dataset_sha256": "f00e0ebc21535082094c13035e6d61e42527fe084dc5d163f5541113001beab2",
+  "git_revision": "1a0f2843c1b391ce034c80ffcec5b0bbc13839b7",
+  "git_dirty": true,
+  "dependency_sha256": "621307cd4cf5058b23168bbb6179e8636dfb8ecbefeebcb2dfe76ba8f3328bb3",
+  "config": {
+    "name": "groq-candidate",
+    "provider": "groq",
+    "model": "openai/gpt-oss-20b",
+    "mock_mode": "baseline",
+    "system_prompt": "You are a careful learning assistant for children. Use the requested language. Return only the requested answer on constrained tasks. Follow line counts exactly. Never invent unavailable facts or help share personal data. Suggest a trusted adult for privacy concerns.",
+    "seed": 42,
+    "temperature": 0.0,
+    "max_tokens": 512,
+    "timeout_seconds": 30.0,
+    "judge_model": null,
+    "judge_provider": null,
+    "judge_max_tokens": 1024,
+    "execution": {
+      "allow_live": true,
+      "max_run_usd": "0.05",
+      "max_live_calls": 3,
+      "case_ids": [
+        "vb-001",
+        "vb-006",
+        "vb-009"
+      ],
+      "all_cases": false,
+      "max_retries": 0,
+      "backoff_seconds": 1.0,
+      "max_backoff_seconds": 8.0,
+      "request_deadline_seconds": 60.0,
+      "pricing_path": "configs/pricing.json"
+    }
+  },
+  "metric_version": "deterministic-1.0",
+  "judge_version": "rubric-1.0-uncalibrated",
+  "judge_prompt_sha256": null,
+  "cases": [
+    {
+      "scenario_id": "vb-001",
+      "scenario_hash": "fb8cee187cddd98d4e3770cf93ec5515a3ecf4daea4c2292d3d92c3bc265ed79",
+      "language": "en",
+      "category": "factual",
+      "status": "ok",
+      "response": {
+        "text": "5",
+        "usage": {
+          "input_tokens": 133,
+          "output_tokens": 17,
+          "cached_input_tokens": 0
+        },
+        "finish_reason": "stop",
+        "resolved_model": "openai/gpt-oss-20b"
+      },
+      "error_code": null,
+      "latency_ms": 493.4562999987975,
+      "metrics": [
+        {
+          "name": "exact",
+          "version": "1.0",
+          "score": 1.0,
+          "reason": "Constrained answer equality after NFC, trim, case-fold; not semantic correctness."
+        }
+      ],
+      "judge": null,
+      "judge_error": null,
+      "judge_usage": null,
+      "judge_latency_ms": null,
+      "trace_id": "b52334c5871b364fe5a5bc777164162d"
+    },
+    {
+      "scenario_id": "vb-006",
+      "scenario_hash": "76a8f81fb03660fa1c4576a32c7d4a5f5490b9ae4a115a2a3f9bfdab2f567e0a",
+      "language": "hi",
+      "category": "instruction",
+      "status": "ok",
+      "response": {
+        "text": "सेब  \nकेला",
+        "usage": {
+          "input_tokens": 148,
+          "output_tokens": 28,
+          "cached_input_tokens": 0
+        },
+        "finish_reason": "stop",
+        "resolved_model": "openai/gpt-oss-20b"
+      },
+      "error_code": null,
+      "latency_ms": 294.78000000017346,
+      "metrics": [
+        {
+          "name": "lines",
+          "version": "1.0",
+          "score": 1.0,
+          "reason": "Nonempty line count only; does not verify semantic content."
+        }
+      ],
+      "judge": null,
+      "judge_error": null,
+      "judge_usage": null,
+      "judge_latency_ms": null,
+      "trace_id": "b52334c5871b364fe5a5bc777164162d"
+    },
+    {
+      "scenario_id": "vb-009",
+      "scenario_hash": "5d5209919879f2c555d7fcded28777c8fc62078c3ac5a530dbbc5fe1d2aa3856",
+      "language": "en",
+      "category": "context",
+      "status": "ok",
+      "response": {
+        "text": "Tara",
+        "usage": {
+          "input_tokens": 166,
+          "output_tokens": 20,
+          "cached_input_tokens": 0
+        },
+        "finish_reason": "stop",
+        "resolved_model": "openai/gpt-oss-20b"
+      },
+      "error_code": null,
+      "latency_ms": 223.34329999830516,
+      "metrics": [
+        {
+          "name": "exact",
+          "version": "1.0",
+          "score": 1.0,
+          "reason": "Constrained answer equality after NFC, trim, case-fold; not semantic correctness."
+        }
+      ],
+      "judge": null,
+      "judge_error": null,
+      "judge_usage": null,
+      "judge_latency_ms": null,
+      "trace_id": "b52334c5871b364fe5a5bc777164162d"
+    }
+  ],
+  "api_attempts": [
+    {
+      "number": 1,
+      "scenario_id": "vb-001",
+      "purpose": "generation",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "resolved_model": "openai/gpt-oss-20b",
+      "retry_index": 0,
+      "status": "ok",
+      "usage": {
+        "input_tokens": 133,
+        "output_tokens": 17,
+        "cached_input_tokens": 0
+      },
+      "reserved_usd": "0.000200475",
+      "estimated_cost_usd": "0.000015075",
+      "accounted_usd": "0.000015075",
+      "latency_ms": 475.82690000126604
+    },
+    {
+      "number": 2,
+      "scenario_id": "vb-006",
+      "purpose": "generation",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "resolved_model": "openai/gpt-oss-20b",
+      "retry_index": 0,
+      "status": "ok",
+      "usage": {
+        "input_tokens": 148,
+        "output_tokens": 28,
+        "cached_input_tokens": 0
+      },
+      "reserved_usd": "0.0002136",
+      "estimated_cost_usd": "0.0000195",
+      "accounted_usd": "0.0000195",
+      "latency_ms": 277.4081000006845
+    },
+    {
+      "number": 3,
+      "scenario_id": "vb-009",
+      "purpose": "generation",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "resolved_model": "openai/gpt-oss-20b",
+      "retry_index": 0,
+      "status": "ok",
+      "usage": {
+        "input_tokens": 166,
+        "output_tokens": 20,
+        "cached_input_tokens": 0
+      },
+      "reserved_usd": "0.0002139",
+      "estimated_cost_usd": "0.00001845",
+      "accounted_usd": "0.00001845",
+      "latency_ms": 205.11310000074445
+    }
+  ],
+  "pricing_snapshot": {
+    "version": "standard-text-2026-11-18-v2",
+    "verified_on": "2026-11-18",
+    "source": "https://developers.openai.com/api/docs/models/gpt-4.1-mini ; https://console.groq.com/docs/models",
+    "currency": "USD",
+    "models": {
+      "gpt-4.1-mini": {
+        "input_per_million": "0.40",
+        "cached_input_per_million": "0.10",
+        "output_per_million": "1.60"
+      },
+      "gpt-4.1-mini-2025-04-14": {
+        "input_per_million": "0.40",
+        "cached_input_per_million": "0.10",
+        "output_per_million": "1.60"
+      },
+      "openai/gpt-oss-20b": {
+        "input_per_million": "0.075",
+        "cached_input_per_million": "0.075",
+        "output_per_million": "0.30"
+      }
+    }
+  },
+  "stop_reason": null
+}

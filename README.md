@@ -4,8 +4,21 @@ A CLI-first conversational AI evaluation and observability MVP built with Python
 3.11+, Pydantic, pytest, and OpenTelemetry. It evaluates fixed synthetic
 conversations, compares configurations, and enforces deterministic regressions.
 
-**Status:** working offline MVP. Live adapter and rubric judging are transport/unit
-tested, not live-validated. No production deployment or child-safety claim.
+**Status:** working local demonstration MVP. Groq generation/judging and a small
+real A/B run have been executed; OpenAI is implemented but its account smoke test
+returned quota exhaustion. No production deployment or child-safety claim.
+
+## Present it live
+
+```powershell
+uv run --no-sync vaanibench demo
+```
+
+Open http://127.0.0.1:8765. Select cases/configurations, run a mock comparison,
+watch case progress, expand responses and rubrics, and download results/traces.
+The default six-case mock demo shows an intentional regression. Mock presentation
+pacing is outside measured request latency. For the walkthrough and optional
+credentialed Groq mode, see [the presentation guide](docs/demo.md).
 
 ## Quick start
 
@@ -89,7 +102,7 @@ ratings are shown separately and never silently substituted for correctness.
 ## Observability and investigating failures
 
 Every run writes `traces.jsonl` with OpenTelemetry evaluation/case spans, plus
-judge spans when enabled. Result records retain the trace ID. Span attributes
+judge spans when enabled, and a safe event for each live HTTP attempt. Result records retain the trace ID. Span attributes
 contain operational IDs, categories/languages, status, latency, and known usage;
 prompt/response text and API keys are excluded. Local exporter failure preserves
 results and emits a warning. A hosted Langfuse/OTLP backend is not configured.
@@ -97,31 +110,50 @@ results and emits a warning. A hosted Langfuse/OTLP backend is not configured.
 Inspect `run.json` for response text, safe error code, metric reason, judge error,
 and usage; match its trace ID in `traces.jsonl`. Reports include error rate and
 nearest-rank p50/p95 duration over all attempts (errors included). Unknown token
-usage remains null. No verified pricing table is configured, so dollar cost is
-unknown; model usage and judge usage are recorded separately.
+usage remains null. A versioned pricing snapshot estimates live USD costs;
+generation and judge attempts/usage are recorded separately. Mock token usage and
+cost remain unknown. `accounted_usd` includes conservative reservations when live
+usage is unavailable; it is not a statement of actual billed spend.
 
 ## Optional live evaluations
 
-No live API call was executed during offline verification. You need an API account,
+Unit tests make no live API calls. For a live demonstration you need an API account,
 model access, and billing. Review current provider pricing and limit the first run.
 Never paste a key into chat, source files, configs, or Git. On PowerShell 7:
 
 ```powershell
 $env:OPENAI_API_KEY = Read-Host "OpenAI API key" -MaskInput
-uv run --no-sync vaanibench run --config configs/openai-example.json --out artifacts/live-a
-uv run --no-sync vaanibench run --config configs/openai-candidate.json --out artifacts/live-b
+uv run --no-sync vaanibench run --config configs/openai-example.json --live --case-ids vb-001 --out artifacts/live-a
+uv run --no-sync vaanibench run --config configs/openai-candidate.json --live --case-ids vb-001 --out artifacts/live-b
 ```
 
 For an optional paid judge, add `--judge-model gpt-4.1-mini` to **both** run
 commands and use fresh output paths. Each successful case then adds one judge
-request. Configured model names are examples; confirm access and supported
-Chat Completions parameters before use. The adapter makes one bounded attempt
-per request with no automatic retries. Incomplete responses become errors.
+request before retries. Live execution requires `--live` (or
+`execution.allow_live=true`) and explicit `--case-ids` (or config case IDs).
+`--all-cases` is a separate deliberate full-dataset opt-in. A key alone never
+enables live execution, including a judge on mock generation. Configured model
+names must have a verified entry in `configs/pricing.json`; no model fallback
+occurs. Confirm access and supported Chat Completions parameters before use.
+See [API safety and cost controls](docs/api-integration.md) for limits and retries.
 `.env` files are ignored by Git but are **not automatically loaded**.
+Load them explicitly with `--env-file .env`. The loader accepts only
+OPENAI_API_KEY and GROQ_API_KEY, never executes variable expansion, and never
+prints values. Groq configs use `provider: "groq"` and GROQ_API_KEY:
+
+```powershell
+uv run --no-sync vaanibench run --config configs/groq-baseline.json --env-file .env --live --case-ids vb-001 --out artifacts/groq-single-case
+```
+
+Groq's Free plan has provider-enforced limits; do not assume an arbitrary API key
+is free-tier. Estimates use paid-equivalent rates, not evidence of a cash charge.
+See the [executed Groq evidence](docs/benchmarks/groq-live-v1/README.md).
 
 ## Tests and CI
 
-Local verification: **68 tests passed**. The suite covers strict schemas/locations, dataset integrity, provider parsing and
+The original MVP had 68 passing tests. Current verification includes additional
+API safety/accounting tests; see [checkpoint status](docs/progress.md).
+The suite covers strict schemas/locations, dataset integrity, provider parsing and
 safe errors, metric applicability, judge parsing/failure isolation, repeatability,
 trace redaction/export failures, aggregation, regression thresholds, CLI exit
 codes, and the end-to-end benchmark. Tests make no paid requests.
@@ -138,7 +170,10 @@ execution is pending a remote repository and push.
 
 JSONL -> Pydantic validation -> provider adapter -> sequential runner -> metrics
 -> JSON/Markdown reports -> paired gate. OpenTelemetry spans accompany execution.
-There is no frontend, database, public paid-run endpoint, or deployment machinery.
+The thin local web interface calls the same engine. There is no database, public
+paid-run endpoint, or deployment machinery. The server binds only to loopback,
+checks Host/Origin and a local request token, serializes comparisons, and caps a
+live server session at two configuration runs.
 
 See [architecture](docs/architecture.md), [component trade-offs](docs/engineering-notes.md),
 [checkpoint status](docs/progress.md), and the original

@@ -33,11 +33,11 @@ def test_unexpected_error_redacted(execute):
     assert "private-secret-token" not in run.model_dump_json()
 
 
-def test_judge_failure_separate(execute):
+def test_judge_failure_separate(execute, authorized_config):
     class BadJudge:
         def generate(self, messages):
             return Response(text='{"correctness":99}')
-    run = execute(config=Experiment(name="judged", judge_model="fake-judge"), judge=BadJudge())
+    run = execute(config=authorized_config(provider="mock", judge_model="gpt-4.1-mini"), judge=BadJudge())
     assert all(c.status == "ok" and c.judge_error == "judge_failed_or_invalid" for c in run.cases)
 
 

@@ -11,13 +11,17 @@
 | Tracing | Per-run/case/judge OTel spans; content-free local export | test_telemetry.py; inspect traces.jsonl | Local export only; backend delivery and retention not implemented |
 | CI | Locked install, tests, mock benchmark and intentional regression rejection | workflow plus locally executed equivalent | Remote CI not verified until pushed and run |
 
-Operational caveats: no retries (one bounded paid attempt per call); transport
-timeouts are socket timeouts, not a hard total run deadline. Output persistence
+Operational caveats: up to two budgeted retries for transient rate limits and
+selected server errors, with capped exponential backoff/jitter and Retry-After.
+Quota/authentication errors halt the run; ambiguous timeouts are not retried.
+Transport timeouts are socket timeouts; a checked deadline bounds further
+requests/backoff, not a hard process-interruption guarantee. Output persistence
 occurs after the run, so an interrupted process may leave traces without a final
 run.json. Never reuse an output directory. Synthetic run.json files contain
 response text; inspect before sharing. Model names/config support and credentials
 must be checked during the first live smoke test. Unknown token counts/costs stay
-unknown; billed usage on failed/truncated calls may be unavailable.
+unknown and retain reservations. Available usage on truncated/invalid judge
+responses is retained. See api-integration.md for the accounting policy.
 
 API/trace references used for implementation:
 - https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create

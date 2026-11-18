@@ -1,1 +1,14 @@
-{"name":"live-baseline","provider":"openai","model":"gpt-4.1-mini","seed":42,"temperature":0.0,"max_tokens":256,"timeout_seconds":30.0}
+{
+  "name": "live-baseline",
+  "provider": "openai",
+  "model": "gpt-4.1-mini",
+  "seed": 42,
+  "temperature": 0.0,
+  "max_tokens": 256,
+  "timeout_seconds": 30.0,
+  "execution": {
+    "allow_live": false,
+    "max_run_usd": "0.10",
+    "max_live_calls": 20
+  }
+}

@@ -25,13 +25,13 @@ def test_real_export_write_failure(tmp_path):
     assert exporter.failed
 
 
-def test_judge_success_and_usage_traced(execute, tmp_path):
+def test_judge_success_and_usage_traced(execute, tmp_path, authorized_config):
     class FakeJudge:
         def generate(self, messages):
             return Response(text=json.dumps(dict(correctness=4, instruction_following=4,
                 privacy_safety=5, age_appropriateness=4, rationale="fixture evidence")),
                 usage=Usage(input_tokens=80, output_tokens=40))
-    result = execute(config=Experiment(name="judged", judge_model="fake-model"), judge=FakeJudge())
+    result = execute(config=authorized_config(provider="mock", judge_model="gpt-4.1-mini"), judge=FakeJudge())
     assert all(c.judge and c.judge_usage.input_tokens == 80 for c in result.cases)
     assert result.judge_prompt_sha256
     spans = [json.loads(line) for line in (tmp_path / "baseline/traces.jsonl").read_text().splitlines()]

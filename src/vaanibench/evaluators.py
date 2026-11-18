@@ -42,9 +42,13 @@ def evaluate(case: Scenario, text: str) -> list[Metric]:
     return results or [Metric(name="semantic_quality", score=None, reason="No applicable deterministic check; requires human/judge review.")]
 
 
-def judge_response(case: Scenario, text: str, provider: Provider) -> tuple[JudgeScores, Response]:
+def request_judgment(case: Scenario, text: str, provider: Provider) -> Response:
     data = dict(age_years=case.age_years, language=case.language,
                 conversation=[m.model_dump() for m in case.messages], rubric=case.rubric,
                 reference_answer=case.reference_answer, candidate_response=text)
-    response = provider.generate([Message(role="user", content=json.dumps(data, ensure_ascii=False))])
+    return provider.generate([Message(role="user", content=json.dumps(data, ensure_ascii=False))])
+
+
+def judge_response(case: Scenario, text: str, provider: Provider) -> tuple[JudgeScores, Response]:
+    response = request_judgment(case, text, provider)
     return JudgeScores.model_validate_json(response.text), response

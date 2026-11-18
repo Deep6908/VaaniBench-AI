@@ -1,8 +1,8 @@
 # Architecture and decisions
 
 Status: implemented CLI-first MVP. See README.md for executed results and limits.
-The latest execution brief supersedes the original deployment plan: no frontend
-or hosting infrastructure is required for this MVP. The rubric judge is optional
+The latest demonstration request adds a thin local frontend; public hosting
+infrastructure remains deferred. The rubric judge is optional
 and uncalibrated; human calibration remains later work.
 
 ## Data flow
@@ -20,8 +20,9 @@ flowchart LR
   Reports --> Demo[Read-only deployed demo]
 ```
 
-The Python CLI is the system of record. A future web demo could display sanitized, precomputed
-reports without exposing a public endpoint for spending API credits. Start
+The Python CLI is the system of record. The local demo calls the same runner,
+receives progress callbacks, and serves artifacts without exposing a public
+endpoint for spending API credits. Start
 without a database, queue, orchestration framework, or live chat service.
 
 ## Module responsibilities
@@ -35,6 +36,9 @@ without a database, queue, orchestration framework, or live chat service.
 | report.py | Aggregation, readable reports, paired comparisons, regression decisions |
 | telemetry.py | Trace lifecycle, redaction, optional export |
 | cli.py | Arguments and exit codes; delegate business logic to modules |
+| costs.py | Versioned pricing, shared per-run attempt/USD ledger and reservations |
+| credentials.py | Explicit, allowlisted environment-file loading without secret output |
+| demo.py and web/ | Loopback HTTP adapter, bounded comparison jobs, progress and result interface |
 
 ## Contracts and boundaries
 
@@ -46,6 +50,10 @@ without a database, queue, orchestration framework, or live chat service.
 - Providers receive messages and generation configuration only. Return response
   text, identity, optional usage, and finish information. Normalize timeout,
   transport, and provider failures. Bound timeouts and retries; log attempts.
+- Live providers require explicit authorization and case selection. Generation,
+  judge calls, and retries share a ledger: default $0.10 estimated USD and 20 HTTP
+  attempts per run. Mock mode needs no key or pricing table. Model prices are
+  validated before calling; token-derived costs remain estimates, not invoices.
 - Every case yields a result, including failures. A metric has a name, version,
   applicability, result, and reason. Not evaluated is distinct from pass/fail.
 - Capture dataset hash, code revision and dirty state, model identifier,

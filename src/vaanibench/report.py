@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import statistics
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
 
@@ -24,6 +25,8 @@ def percentile(values: list[float], q: float) -> float | None:
 
 def summary(run: Run) -> dict:
     ok = [c for c in run.cases if c.status == "ok"]
+    errors = sum(c.status == "error" for c in run.cases)
+    skipped = sum(c.status == "skipped" for c in run.cases)
     scores = [s for c in run.cases if (s := case_score(c)) is not None]
     latency = [c.latency_ms for c in run.cases]
     def tokens(field: str):
@@ -38,15 +41,33 @@ def summary(run: Run) -> dict:
             subgroup_scores = [s for c in subset if (s := case_score(c)) is not None]
             groups[dimension][label] = dict(total=len(subset), errors=sum(c.status == "error" for c in subset),
                 scored=len(subgroup_scores), score=statistics.mean(subgroup_scores) if subgroup_scores else None)
-    return dict(total=len(run.cases), successful=len(ok), errors=len(run.cases)-len(ok),
-        error_rate=(len(run.cases)-len(ok))/len(run.cases), scored=len(scores),
+    attempts = run.api_attempts
+    estimates = [a.estimated_cost_usd for a in attempts if a.estimated_cost_usd is not None]
+    accounted = sum((a.accounted_usd for a in attempts), Decimal(0))
+    known_cost = sum(estimates, Decimal(0)) if estimates else None
+    by_purpose = {}
+    for purpose in ["generation", "judge"]:
+        subset = [a for a in attempts if a.purpose == purpose]
+        by_purpose[purpose] = dict(attempts=len(subset),
+            input_tokens=sum(a.usage.input_tokens or 0 for a in subset) if any(a.usage.input_tokens is not None for a in subset) else None,
+            output_tokens=sum(a.usage.output_tokens or 0 for a in subset) if any(a.usage.output_tokens is not None for a in subset) else None,
+            cached_input_tokens=sum(a.usage.cached_input_tokens for a in subset) if any(a.usage.input_tokens is not None for a in subset) else None,
+            usage_unknown_attempts=sum(a.usage.input_tokens is None or a.usage.output_tokens is None for a in subset),
+            accounted_usd=str(sum((a.accounted_usd for a in subset), Decimal(0))))
+    return dict(total=len(run.cases), successful=len(ok), errors=errors, skipped=skipped,
+        error_rate=errors/len(run.cases), uncompleted_rate=(errors+skipped)/len(run.cases), scored=len(scores),
         not_scored=len(run.cases)-len(scores), deterministic_score=statistics.mean(scores) if scores else None,
         latency_ms=dict(p50=percentile(latency, .5), p95=percentile(latency, .95), scope="all attempts, including errors"),
         input_tokens=tokens("input_tokens"), output_tokens=tokens("output_tokens"),
         judge_scored=sum(c.judge is not None for c in run.cases),
         judge_errors=sum(c.judge_error is not None for c in run.cases),
         judge_input_tokens=sum(c.judge_usage.input_tokens or 0 for c in run.cases if c.judge_usage) if any(c.judge_usage and c.judge_usage.input_tokens is not None for c in run.cases) else None,
-        cost_usd=None, cost_reason="No verified pricing table configured; token counts are not dollar costs.",
+        cost_usd=str(known_cost) if attempts and len(estimates) == len(attempts) else None,
+        known_estimated_cost_usd=str(known_cost) if known_cost is not None else None,
+        accounted_usd=str(accounted), live_api_calls=len(attempts),
+        unknown_cost_attempts=len(attempts)-len(estimates), api_usage=by_purpose,
+        cost_reason="USD values are estimates, not invoices. Accounted USD retains reservations for unknown usage; mock costs/usage remain unknown.",
+        stop_reason=run.stop_reason,
         groups=groups)
 
 
@@ -59,9 +80,9 @@ class Thresholds(Contract):
 
 def compare(baseline: Run, candidate: Run, thresholds: Thresholds) -> dict:
     if (baseline.dataset_sha256, baseline.metric_version, baseline.judge_version,
-        baseline.config.judge_model, baseline.judge_prompt_sha256) != (
+        baseline.config.judge_model, (baseline.config.judge_provider or (baseline.config.provider if baseline.config.provider != "mock" else "openai")) if baseline.config.judge_model else None, baseline.judge_prompt_sha256) != (
         candidate.dataset_sha256, candidate.metric_version, candidate.judge_version,
-        candidate.config.judge_model, candidate.judge_prompt_sha256):
+        candidate.config.judge_model, (candidate.config.judge_provider or (candidate.config.provider if candidate.config.provider != "mock" else "openai")) if candidate.config.judge_model else None, candidate.judge_prompt_sha256):
         raise ValueError("incompatible dataset, metric version, or judge configuration")
     a = {c.scenario_id: c for c in baseline.cases}
     b = {c.scenario_id: c for c in candidate.cases}
@@ -79,6 +100,7 @@ def compare(baseline: Run, candidate: Run, thresholds: Thresholds) -> dict:
     baseline_scored = sum(case_score(c) is not None for c in a.values())
     coverage = len(pairs)/baseline_scored if baseline_scored else 0.0
     error_delta = summary(candidate)["error_rate"] - summary(baseline)["error_rate"]
+    uncompleted_delta = summary(candidate)["uncompleted_rate"] - summary(baseline)["uncompleted_rate"]
     reasons = []
     if delta is None:
         reasons.append("no comparable deterministic scores")
@@ -88,6 +110,8 @@ def compare(baseline: Run, candidate: Run, thresholds: Thresholds) -> dict:
         reasons.append("paired scored coverage below threshold")
     if error_delta > thresholds.max_error_increase + 1e-12:
         reasons.append("error rate increase exceeds threshold")
+    if uncompleted_delta > thresholds.max_error_increase + 1e-12 and uncompleted_delta > error_delta:
+        reasons.append("uncompleted rate (errors/skips) increase exceeds threshold")
     ratio = None
     a95, b95 = summary(baseline)["latency_ms"]["p95"], summary(candidate)["latency_ms"]["p95"]
     if a95 and b95 is not None:
@@ -100,7 +124,7 @@ def compare(baseline: Run, candidate: Run, thresholds: Thresholds) -> dict:
         dataset_sha256=baseline.dataset_sha256, thresholds=thresholds.model_dump(),
         passed=not reasons, failures=reasons, paired_cases=len(pairs), missing_pairs=missing,
         scored_coverage=coverage, mean_paired_delta=delta, error_rate_delta=error_delta,
-        p95_latency_ratio=ratio, pairs=pairs, judge_pairs=judge_pairs,
+        uncompleted_rate_delta=uncompleted_delta, p95_latency_ratio=ratio, pairs=pairs, judge_pairs=judge_pairs,
         judge_note="Uncalibrated subjective scores; excluded from deterministic quality gate.")
 
 
@@ -114,12 +138,13 @@ def write_report(run: Run, path: Path) -> None:
         f"Provider: **{run.config.provider}**; model: `{run.config.model}`.",
         f"Dataset: `{run.dataset_version}` / `{run.dataset_sha256}`.", "",
         "MOCK FIXTURE RESULTS — not model-quality evidence." if run.config.provider == "mock" else "Live-model run; inspect configuration and limitations before interpreting scores.",
-        "", f"Requests: {data['successful']}/{data['total']} successful; {data['errors']} errors.",
+        "", f"Requests: {data['successful']}/{data['total']} successful; {data['errors']} errors; {data['skipped']} skipped.",
         f"Deterministic scored cases: {data['scored']}/{data['total']}; mean: {data['deterministic_score']}.",
         f"Unscored/failed: {data['not_scored']}. Semantic safety/quality is not inferred from format checks.",
         f"Latency p50/p95 (ms, all attempts): {data['latency_ms']['p50']} / {data['latency_ms']['p95']}.",
         f"Judge scored: {data['judge_scored']}; judge errors: {data['judge_errors']}. Judge ratings are uncalibrated.",
-        "Cost: unknown. Mock token usage is unknown, not zero.", "", "## Failure analysis", "",
+        f"Estimated USD: {data['cost_usd']}; accounted USD including uncertain reservations: {data['accounted_usd']}; live attempts: {data['live_api_calls']}.",
+        "Estimates are not invoices. Mock token usage/cost is unknown, not zero.", "", "## Failure analysis", "",
         "| Case | Language | Category | Status | Deterministic score | Error | Judge |",
         "| --- | --- | --- | --- | --- | --- | --- |"]
     for c in run.cases:

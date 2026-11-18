@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VaaniBench · Evaluation studio</title><link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script></head>
+<body>
+<header class="topbar"><a class="brand" href="/" aria-label="VaaniBench home"><span class="mark">V/</span> VaaniBench</a><span class="topnote">CONVERSATIONAL AI / EVALUATION STUDIO</span><span class="local"><i></i> Local session</span></header>
+<main>
+<section class="intro"><div><p class="eyebrow">EVIDENCE BEFORE CONFIDENCE</p><h1>Measure before<br>you trust.</h1><p class="lede">Run the same conversations through two configurations.<br>Follow the evidence, from each response to the final decision.</p></div><div class="datasetstamp"><span class="stampnumber">20</span><span>SYNTHETIC SCENARIOS<br>3 LANGUAGE LABELS · 5 CATEGORIES</span><p id="dataset-version">Loading dataset…</p></div></section>
+<div class="workspace">
+<aside class="setup"><div class="sectionheading"><span class="eyebrow">01 / CONFIGURE</span><span class="pill" id="mode-pill">MOCK</span></div>
+<label for="mode">Execution mode</label><select id="mode"><option value="mock">Mock · no API calls</option><option value="groq" disabled>Groq · unavailable</option><option value="openai" disabled>OpenAI · unavailable</option></select>
+<label for="baseline">Baseline configuration</label><select id="baseline"></select><label for="candidate">Candidate configuration</label><select id="candidate"></select>
+<details class="promptdetails"><summary>Inspect configuration prompts</summary><strong>Baseline</strong><p id="baseline-prompt"></p><strong>Candidate</strong><p id="candidate-prompt"></p></details>
+<label class="checkline"><input id="judge" type="checkbox" disabled> Add rubric judge <span class="subtle">uncalibrated</span></label>
+<div id="live-options" hidden><label class="checkline"><input type="checkbox" id="confirm-live"> I authorize two live runs, each capped at $0.10 estimated spend and 20 attempts.</label><p class="fine">Free-tier eligibility is determined by your provider account. USD figures use paid-equivalent rates. One live comparison per server session.</p></div>
+<div class="scenarioheading"><label>Scenarios <span id="selected-count">0 / 6</span></label><button id="reset-cases" class="textbutton" type="button">Demo selection</button></div>
+<p class="fine">Select 1–6 cases. The same selection runs on both configurations.</p><div id="scenarios" class="scenarios"></div>
+<button id="run" class="runbutton" disabled>Run comparison <span aria-hidden="true">↗</span></button><p id="run-note" class="fine">Mock events use presentation pacing. Reported request latency excludes that delay.</p><p id="error" role="alert" class="error" hidden></p>
+</aside>
+<section class="experiment"><div class="sectionheading"><span class="eyebrow">02 / OBSERVE & COMPARE</span><span class="subtle" id="session-state">Ready for a run</span></div>
+<div class="runstatus" aria-live="polite"><span id="status-label">Your next experiment starts here.</span><span id="progress-count">0 / 0</span></div><progress id="progress" value="0" max="1" aria-label="Completed responses"></progress>
+<div id="empty" class="empty"><div class="empty-symbol" aria-hidden="true">A <span>⇄</span> B</div><h2>One dataset.<br>Two configurations.</h2><p>Start with the offline fixture to see an intentional regression.<br>Switch to live mode when your local server and account are ready.</p><div class="legend"><span><i class="dot green"></i> Applicable deterministic checks</span><span><i class="dot amber"></i> Semantic review stays separate</span></div></div>
+<div id="results" hidden><div class="summarygrid"><article><p class="eyebrow">BASELINE / SCORED CASES</p><strong id="baseline-score">—</strong><p id="baseline-meta">Waiting</p></article><article><p class="eyebrow">CANDIDATE / SCORED CASES</p><strong id="candidate-score">—</strong><p id="candidate-meta">Waiting</p></article><article id="decision-card"><p class="eyebrow">REGRESSION GATE</p><strong id="decision">Running</strong><p id="delta">Same cases, paired comparison</p></article></div><p id="result-note" class="resultnote"></p><div id="case-results"></div><div id="downloads" class="downloads"></div></div>
+</section></div>
+<footer><span>REPRODUCIBLE INPUTS. INSPECTABLE OUTPUTS.</span><span>Synthetic cases test defined behavior. They do not certify child safety.</span></footer>
+</main></body></html>

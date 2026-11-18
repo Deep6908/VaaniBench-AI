@@ -1,0 +1,12 @@
+{
+  "name": "groq-baseline",
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b",
+  "max_tokens": 512,
+  "judge_max_tokens": 1024,
+  "execution": {
+    "allow_live": false,
+    "max_run_usd": "0.10",
+    "max_live_calls": 20
+  }
+}

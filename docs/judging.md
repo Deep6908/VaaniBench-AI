@@ -2,6 +2,10 @@
 
 Judging is opt-in because it adds a paid model request per successful candidate
 response. Use the same judge model, seed, prompt version, and dataset for A/B.
+Judge attempts and retries share the generation run's dollar/call limits. A judge
+on mock generation still requires explicit live authorization, case selection,
+and a key. Usage is retained even if the returned judge JSON fails validation.
+`judge_max_tokens` configures its output cap independently of generation.
 The prompt lives in evaluators.py; its SHA-256 and judge version are stored in
 each judged run. The recorded config identifies the requested judge model.
 
