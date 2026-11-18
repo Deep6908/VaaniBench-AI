@@ -21,6 +21,9 @@ def test_cli_vertical_slice(tmp_path):
     args[-1] = str(tmp_path / "bad")
     assert main(args) == 2
     assert not json.loads((tmp_path / "bad/comparison.json").read_text())["passed"]
+    regenerated = tmp_path / "regenerated.md"
+    assert main(["report", "--run", str(a / "run.json"), "--out", str(regenerated)]) == 0
+    assert "MOCK FIXTURE RESULTS" in regenerated.read_text()
 
 
 def test_missing_key_no_paid_request(tmp_path, monkeypatch):

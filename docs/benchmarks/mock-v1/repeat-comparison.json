@@ -1,0 +1,95 @@
+{
+  "baseline_run_id": "8ae68fb2a31f4492a56db282f29754a8",
+  "candidate_run_id": "324acaa67aa64bf2aefd5c30ba404a91",
+  "dataset_sha256": "f00e0ebc21535082094c13035e6d61e42527fe084dc5d163f5541113001beab2",
+  "thresholds": {
+    "max_score_drop": 0.0,
+    "max_error_increase": 0.0,
+    "min_scored_coverage": 1.0,
+    "max_latency_ratio": null
+  },
+  "passed": true,
+  "failures": [],
+  "paired_cases": 12,
+  "missing_pairs": [],
+  "scored_coverage": 1.0,
+  "mean_paired_delta": 0.0,
+  "error_rate_delta": 0.0,
+  "p95_latency_ratio": 0.9702127522882644,
+  "pairs": [
+    {
+      "id": "vb-001",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-002",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-003",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-004",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-005",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-006",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-007",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-008",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-009",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-010",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-011",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    },
+    {
+      "id": "vb-012",
+      "baseline": 1.0,
+      "candidate": 1.0,
+      "delta": 0.0
+    }
+  ],
+  "judge_pairs": [],
+  "judge_note": "Uncalibrated subjective scores; excluded from deterministic quality gate."
+}
