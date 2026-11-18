@@ -17,3 +17,10 @@ def test_progress_failure_does_not_abort_or_echo_exception(execute):
         run = execute(on_event=bad)
     assert len(run.cases) == 20
     assert all("secret-from-listener" not in str(w.message) for w in warnings)
+
+
+def test_stop_signal_skips_remaining_cases_without_calling_provider(execute):
+    class NeverCall:
+        def generate(self,messages): pytest.fail("A cancelled run must not invoke providers")
+    run=execute(provider=NeverCall(),should_stop=lambda:True)
+    assert all(c.status=="skipped" and c.error_code=="execution_cancelled" for c in run.cases)

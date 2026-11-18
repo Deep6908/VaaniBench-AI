@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 let data, selected = new Set(), records = {baseline: {}, candidate: {}}, running = false, activeIds = [], jobId, completed = 0;
 let resultFilter = 'all';
+const busyControls = ['mode','baseline','candidate','confirm-live','reset-cases','clear-cases','case-search','preset-regression','preset-repeat','owner-auth','recorded-evidence'];
 const element = (tag, text, cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
 const score = c => { const values = (c?.metrics || []).filter(m => m.score !== null).map(m => m.score); return c?.status === 'ok' && values.length ? values.reduce((a,b) => a+b,0)/values.length : null; };
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -16,9 +17,11 @@ function refreshControls() {
   $('judge').disabled = !live || running;
   $('mock-presets').hidden = live;
   $('run-label').textContent = running ? 'Evaluating…' : selected.size === 0 ? 'Choose a conversation' : 'Run comparison';
+  if (!running && live && data.live_runs_remaining < 2) $('run-label').textContent = data.hosted ? 'Daily limit reached' : 'Session limit reached';
   $('run').classList.toggle('is-running', running);
   $('run').setAttribute('aria-busy', String(running));
   document.querySelectorAll('.scenario input').forEach(check => { check.disabled = running || (selected.size >= 6 && !check.checked); });
+  if (data.hosted && live) { $('run-note').textContent = `Two budgeted runs. Daily UTC limits: ${data.daily_usage?.calls ?? 0}/${data.daily_usage?.max_calls ?? 0} attempts; USD ${data.daily_usage?.accounted_usd ?? 'unknown'}/${data.daily_usage?.max_usd ?? 'unknown'} accounted. Estimates are not invoices.`; return; }
   $('run-note').textContent = live ? `Two separate runs. Up to $0.20 estimated combined; ${data.live_runs_remaining} live runs remain in this server session. No paid fallback.` : 'Mock events use presentation pacing. Reported request latency excludes that delay.';
 }
 function renderSelection() {
@@ -86,29 +89,39 @@ async function start() {
   $('empty').hidden = true; $('results').hidden = false; $('downloads').replaceChildren(); $('decision').textContent = 'Running'; $('decision-card').className = ''; $('delta').textContent = 'Waiting for both runs';
   $('progress').max = activeIds.length*2; $('progress').value = 0; $('progress-count').textContent = `0 / ${activeIds.length*2}`; $('session-state').textContent = 'Evaluation in progress';
   $('result-note').textContent = $('mode').value === 'mock' ? 'Mock fixture: injected degradation demonstrates the gate. These scores are not evidence of real-model quality.' : 'Live run: token-based USD estimates are not invoices. Judge ratings remain subjective and uncalibrated.';
-  for (const id of ['mode','baseline','candidate','confirm-live','reset-cases','clear-cases','case-search','preset-regression','preset-repeat']) $(id).disabled = true;
+  for (const id of busyControls) $(id).disabled = true;
   renderSelection(); renderCases(); updateScore('baseline'); updateScore('candidate');
   if (window.innerWidth < 760) $('experiment').scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
   try {
     const response = await request('/api/runs', {method:'POST',headers:{'Content-Type':'application/json','X-VaaniBench-Token':data.token}, body:JSON.stringify({baseline:$('baseline').value,candidate:$('candidate').value,case_ids:activeIds,judge:$('judge').checked,confirm_live:$('confirm-live').checked})});
-    jobId = response.job_id; let cursor = 0;
+    jobId = response.job_id;
+    if (data.hosted) sessionStorage.setItem('vaanibench_active_job',JSON.stringify({id:jobId,ids:activeIds,mode:$('mode').value,baseline:$('baseline').value,candidate:$('candidate').value,judge:$('judge').checked}));
+    await watchJob();
+  } catch (e) { error(e.message); $('status-label').textContent = 'Run did not finish'; $('decision').textContent = 'Incomplete'; $('session-state').textContent = 'Attention required'; }
+  finally {
+    running = false; for (const id of busyControls) $(id).disabled = false;
+    try { const fresh = await request('/api/bootstrap'); data.live_runs_remaining = fresh.live_runs_remaining; data.daily_usage = fresh.daily_usage; } catch (_) {}
+    renderSelection(); refreshControls();
+  }
+}
+async function watchJob() {
+    let cursor = 0;
     while (true) {
       const snapshot = await request(`/api/jobs/${jobId}?after=${cursor}`); cursor = snapshot.cursor;
       for (const event of snapshot.events) {
         if (event.event === 'case_started') { records[event.side][event.scenario_id] = {status:'running'}; $('status-label').textContent = `${event.side === 'baseline' ? 'A / Baseline' : 'B / Candidate'} · ${event.scenario_id}`; }
         if (event.event === 'case_completed') { records[event.side][event.result.scenario_id] = event.result; completed++; $('progress').value = completed; $('progress-count').textContent = `${completed} / ${activeIds.length*2}`; updateScore(event.side); }
       } renderCases();
-      if (snapshot.status === 'failed') throw new Error(snapshot.error);
+      if (snapshot.status === 'failed' || snapshot.status === 'interrupted') {
+        if (data.hosted) sessionStorage.removeItem('vaanibench_active_job');
+        throw new Error(snapshot.error || 'Evaluation was interrupted. Start a new comparison.');
+      }
       if (snapshot.status === 'completed') { finish(snapshot.result); break; }
       await wait(250);
     }
-  } catch (e) { error(e.message); $('status-label').textContent = 'Run did not finish'; $('decision').textContent = 'Incomplete'; $('session-state').textContent = 'Attention required'; }
-  finally {
-    running = false; for (const id of ['mode','baseline','candidate','confirm-live','reset-cases','clear-cases','case-search','preset-regression','preset-repeat']) $(id).disabled = false;
-    try { const fresh = await request('/api/bootstrap'); data.live_runs_remaining = fresh.live_runs_remaining; } catch (_) {}
-    renderSelection(); refreshControls();
-  }
+    if (data.hosted) sessionStorage.removeItem('vaanibench_active_job');
 }
+
 function finish(result) {
   const decision = result.comparison;
   for (const side of ['baseline','candidate']) {
@@ -123,7 +136,7 @@ function finish(result) {
   if (decision.failures.length) $('result-note').textContent += ' Gate: '+decision.failures.join('; ')+'.';
   const firstChanged = activeIds.find(id => records.baseline[id]?.response?.text !== records.candidate[id]?.response?.text) || activeIds[0];
   const firstDetail = [...$('case-results').children].find(n => n.dataset.id === firstChanged); if (firstDetail) firstDetail.open = true;
-  for (const name of result.downloads) { const link = element('a',name); link.href = `/api/jobs/${jobId}/download/${name}`; link.download = name; $('downloads').append(link); }
+  for (const name of result.downloads) { const link = element('a',name); link.href = `${result.download_base || '/api/jobs/'+jobId+'/download'}/${name}`; link.download = name; $('downloads').append(link); }
 }
 async function init() {
   try {
@@ -136,7 +149,51 @@ async function init() {
     $('case-search').addEventListener('input',renderSelection);
     for (const [id,candidate] of [['preset-regression','mock-degraded'],['preset-repeat','mock-baseline']]) $(id).addEventListener('click',() => { $('baseline').value='mock-baseline'; $('candidate').value=candidate; configPrompts(); refreshControls(); });
     document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click',() => { resultFilter=button.dataset.filter; document.querySelectorAll('[data-filter]').forEach(b => b.setAttribute('aria-pressed', String(b===button))); renderCases(); }));
+    $('session-label').textContent = data.hosted ? (data.authenticated ? 'Owner session' : 'Public demo') : 'Local session';
+    $('owner-auth').hidden = !data.hosted || !data.login_available;
+    $('owner-auth').textContent = data.authenticated ? 'Sign out' : 'Owner sign-in';
+    $('recorded-evidence').hidden = !data.evidence_available;
+    $('owner-auth').addEventListener('click',async () => {
+      if (!data.authenticated) { $('login-error').hidden=true; $('owner-dialog').showModal(); return; }
+      try { await request('/api/logout',{method:'POST',headers:{'X-VaaniBench-Token':data.token}}); sessionStorage.removeItem('vaanibench_active_job'); location.reload(); } catch(e) { error(e.message); }
+    });
+    $('cancel-login').addEventListener('click',() => { $('owner-password').value=''; $('owner-dialog').close(); });
+    $('owner-dialog').addEventListener('cancel',() => { $('owner-password').value=''; });
+    $('owner-form').addEventListener('submit',async event => {
+      event.preventDefault(); $('submit-login').disabled=true; $('login-error').hidden=true;
+      try { await request('/api/login',{method:'POST',headers:{'Content-Type':'application/json','X-VaaniBench-Token':data.token},body:JSON.stringify({password:$('owner-password').value})}); sessionStorage.removeItem('vaanibench_active_job'); location.reload(); }
+      catch(e) { $('login-error').textContent=e.message; $('login-error').hidden=false; }
+      finally { $('owner-password').value=''; $('submit-login').disabled=false; }
+    });
+    $('recorded-evidence').addEventListener('click',async () => {
+      try {
+        const evidence=await request('/api/evidence'); activeIds=evidence.runs.baseline.cases.map(c=>c.scenario_id);
+        records={baseline:Object.fromEntries(evidence.runs.baseline.cases.map(c=>[c.scenario_id,c])),candidate:Object.fromEntries(evidence.runs.candidate.cases.map(c=>[c.scenario_id,c]))};
+        resultFilter='all'; document.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter==='all')));
+        $('empty').hidden=true; $('results').hidden=false; $('downloads').replaceChildren();
+        $('result-note').textContent='Recorded real Groq run, not a new API call. Small synthetic sample; paid-equivalent estimates are not invoices.';
+        renderCases(); updateScore('baseline'); updateScore('candidate'); finish(evidence);
+        $('status-label').textContent='Recorded Groq benchmark · no new API calls';
+      } catch(e) { error(e.message); }
+    });
     modeChanged(); renderSelection();
+    const saved=data.hosted && sessionStorage.getItem('vaanibench_active_job');
+    if (saved) {
+      try {
+        const pending=JSON.parse(saved); jobId=pending.id; activeIds=pending.ids.filter(id=>data.scenarios.some(c=>c.id===id));
+        if (!activeIds.length) throw new Error('No saved selection');
+        if ([...$('mode').options].some(o=>o.value===pending.mode && !o.disabled)) { $('mode').value=pending.mode; modeChanged(); }
+        selected=new Set(activeIds); for (const side of ['baseline','candidate']) if ([...$(side).options].some(o=>o.value===pending[side])) $(side).value=pending[side]; configPrompts();
+        $('judge').checked=Boolean(pending.judge) && !$('judge').disabled;
+        records={baseline:{},candidate:{}}; completed=0; running=true;
+        $('empty').hidden=true; $('results').hidden=false; $('downloads').replaceChildren();
+        $('progress').max=activeIds.length*2; $('progress').value=0; $('session-state').textContent='Resuming saved evaluation';
+        $('result-note').textContent='Resumed evaluation. Inspect provider configuration and limitations before interpreting scores.';
+        busyControls.forEach(id=>$(id).disabled=true); refreshControls();
+        await watchJob();
+      } catch(e) { sessionStorage.removeItem('vaanibench_active_job'); error('Could not resume: '+e.message); }
+      finally { running=false; busyControls.forEach(id=>$(id).disabled=false); renderSelection(); refreshControls(); }
+    }
   } catch (e) { error('Cannot load the local demo. '+e.message); }
 }
 init();

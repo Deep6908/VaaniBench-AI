@@ -36,6 +36,28 @@ class DemoRequest(Contract):
     confirm_live: bool = False
 
 
+def execute_comparison(root, configs, output, *, on_event, pace_seconds=0, daily_guard=None, should_stop=None):
+    """Shared orchestration for local and hosted adapters; inference remains in runner."""
+    runs = {}
+    for side, config in zip(["baseline", "candidate"], configs):
+        def listener(event, side=side, config=config):
+            on_event(side, event)
+            if config.provider == "mock" and event["event"] == "case_completed" and pace_seconds:
+                time.sleep(pace_seconds)
+        run = run_evaluation(root / "data/scenarios.jsonl", root / "data/manifest.json",
+            config, output / side, on_event=listener, daily_guard=daily_guard, should_stop=should_stop)
+        write_report(run, output / side / "report.md")
+        runs[side] = run
+        if run.stop_reason in {"quota_exhausted", "http_401", "http_403", "resolved_model_pricing_mismatch"}:
+            raise ExecutionDenied(run.stop_reason)
+    comparison = compare(runs["baseline"], runs["candidate"], Thresholds())
+    (output / "comparison.json").write_text(json.dumps(comparison, indent=2), encoding="utf-8")
+    write_comparison(comparison, output / "comparison.md")
+    return dict(comparison=comparison, runs={side: dict(summary=summary(run),
+        config=run.config.model_dump(mode="json"), cases=[c.model_dump(mode="json") for c in run.cases])
+        for side, run in runs.items()}, downloads=list(DOWNLOADS))
+
+
 class DemoController:
     def __init__(self, root: Path, *, allow_live=False, pace_seconds=.2):
         self.root = root.resolve()
@@ -99,26 +121,10 @@ class DemoController:
             self.jobs[job_id]["events"].append(dict(side=side, **event))
 
     def _execute(self, job_id, configs):
-        output = self.root / "artifacts/demo" / job_id
-        runs = {}
         try:
-            for side, config in zip(["baseline", "candidate"], configs):
-                def listener(event, side=side, config=config):
-                    self._publish(job_id, side, event)
-                    if config.provider == "mock" and event["event"] == "case_completed" and self.pace_seconds:
-                        time.sleep(self.pace_seconds)
-                run = run_evaluation(self.root / "data/scenarios.jsonl", self.root / "data/manifest.json",
-                    config, output / side, on_event=listener)
-                write_report(run, output / side / "report.md")
-                runs[side] = run
-                if run.stop_reason in {"quota_exhausted", "http_401", "http_403"}:
-                    raise ExecutionDenied(run.stop_reason)
-            comparison = compare(runs["baseline"], runs["candidate"], Thresholds())
-            (output / "comparison.json").write_text(json.dumps(comparison, indent=2), encoding="utf-8")
-            write_comparison(comparison, output / "comparison.md")
-            result = dict(comparison=comparison, runs={side: dict(summary=summary(run),
-                config=run.config.model_dump(mode="json"), cases=[c.model_dump(mode="json") for c in run.cases])
-                for side, run in runs.items()}, downloads=list(DOWNLOADS))
+            result = execute_comparison(self.root, configs, self.root / "artifacts/demo" / job_id,
+                on_event=lambda side, event: self._publish(job_id, side, event),
+                pace_seconds=self.pace_seconds)
             with self.lock:
                 self.jobs[job_id].update(status="completed", result=result)
         except ExecutionDenied as exc:

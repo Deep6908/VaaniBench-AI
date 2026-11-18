@@ -1,5 +1,10 @@
 # Presenting VaaniBench
 
+This guide covers the local `demo` command. For the separate public mock/owner-live
+adapter, Render setup, durable state, and deployment checks, use deployment.md.
+The hosted adapter supports refresh recovery and recorded evidence; the local-only
+limits described below do not apply to that adapter.
+
 ## Start
 
 After `uv sync --locked --cache-dir .uv-cache`, run from the repository root:

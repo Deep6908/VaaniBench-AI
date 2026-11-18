@@ -137,3 +137,14 @@ is zero. Verify account billing separately.
 - [Groq API compatibility](https://console.groq.com/docs/openai)
 - [Groq models/rates](https://console.groq.com/docs/models)
 - [Groq Free plan limits](https://console.groq.com/docs/rate-limits)
+
+## Hosted execution
+
+The hosted adapter attaches a SQLite daily guard to the existing per-run ledger.
+Reservations are committed before every generation/judge/retry transport call;
+known usage reconciles them. Unknown usage and process interruption never trigger
+an automatic refund. Defaults: $0.50 estimated and 50 attempts per UTC day across
+the deployment. CLI/local-demo calls retain their existing per-run controls and
+are outside the hosted daily ledger. See deployment.md for owner authentication,
+persistent-storage requirements, and reset/recovery semantics. The public Blueprint
+does not enable live execution or configure provider secrets.

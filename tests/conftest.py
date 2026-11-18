@@ -1,5 +1,6 @@
 from pathlib import Path
 import socket
+import threading
 
 import pytest
 
@@ -12,10 +13,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
-    def blocked(*args, **kwargs):
+    original_connect = socket.socket.connect
+    original_pair = socket.socketpair
+    local = threading.local()
+    def blocked(connection, address, *args, **kwargs):
+        # Windows asyncio uses the stdlib socketpair fallback for its wake-up pipe.
+        # Permit that implementation's own loopback connection, never general I/O.
+        if getattr(local,"socketpair",False) and isinstance(address,tuple) and address[0] in {"127.0.0.1","::1"}:
+            return original_connect(connection,address,*args,**kwargs)
+        raise AssertionError("Network access is forbidden in tests; inject a fake transport")
+    def pair(*args, **kwargs):
+        previous=getattr(local,"socketpair",False)
+        local.socketpair=True
+        try: return original_pair(*args,**kwargs)
+        finally: local.socketpair=previous
+    def blocked_connection(*args,**kwargs):
         raise AssertionError("Network access is forbidden in tests; inject a fake transport")
     monkeypatch.setattr(socket.socket, "connect", blocked)
-    monkeypatch.setattr(socket, "create_connection", blocked)
+    monkeypatch.setattr(socket, "create_connection", blocked_connection)
+    monkeypatch.setattr(socket,"socketpair",pair)
 
 
 @pytest.fixture

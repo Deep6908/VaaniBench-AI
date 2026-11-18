@@ -10,8 +10,13 @@ def main():
     parser.add_argument("--url", default="http://127.0.0.1:8765")
     parser.add_argument("--browser", help="Path to an installed Chrome/Edge executable")
     parser.add_argument("--check-live-controls", action="store_true", help="Inspect live controls without starting a live run")
+    parser.add_argument("--check-hosted", action="store_true", help="Check refresh recovery and recorded evidence")
+    parser.add_argument("--check-owner-ui", action="store_true", help="Local-only throwaway-password sign-in UI check")
     parser.add_argument("--out", type=Path, default=Path("artifacts/demo-preview"))
     args = parser.parse_args()
+    if args.check_owner_ui:
+        from urllib.parse import urlsplit
+        assert urlsplit(args.url).hostname in {"127.0.0.1","localhost"}, "Owner UI test is local-only"
     args.out.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=args.browser, headless=True)
@@ -62,8 +67,33 @@ def main():
         page.set_viewport_size({"width":1440,"height":1050})
         page.locator("#preset-repeat").click()
         page.locator("#run").click()
+        if args.check_hosted:
+            for _ in range(50):
+                if page.evaluate("sessionStorage.getItem('vaanibench_active_job')"):
+                    break
+                page.wait_for_timeout(50)
+            else:
+                raise AssertionError("Hosted active job was not saved for refresh recovery")
+            page.reload(wait_until="networkidle")
         page.get_by_text("Results saved",exact=True).wait_for()
         assert page.locator("#decision").inner_text() == "Pass"
+        if args.check_hosted:
+            assert page.locator("#session-label").inner_text()=="Public demo"
+            page.locator("#recorded-evidence").click()
+            page.get_by_text("Recorded Groq benchmark · no new API calls",exact=True).wait_for()
+            assert page.locator(".casecard").count()==3
+        if args.check_owner_ui:
+            page.locator("#owner-auth").click()
+            page.locator("#owner-password").fill("temporary browser-only test password")
+            page.keyboard.press("Escape")
+            assert page.locator("#owner-password").input_value()==""
+            page.locator("#owner-auth").click()
+            page.locator("#owner-password").fill("temporary browser-only test password")
+            page.locator("#submit-login").click()
+            page.get_by_text("Owner session",exact=True).wait_for()
+            assert page.locator("#owner-password").input_value()==""
+            page.locator("#owner-auth").click()
+            page.get_by_text("Public demo",exact=True).wait_for()
         if args.check_live_controls:
             page.set_viewport_size({"width":1440,"height":1050})
             page.locator("#mode").select_option("groq")

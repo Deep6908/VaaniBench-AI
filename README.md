@@ -4,9 +4,24 @@ A CLI-first conversational AI evaluation and observability MVP built with Python
 3.11+, Pydantic, pytest, and OpenTelemetry. It evaluates fixed synthetic
 conversations, compares configurations, and enforces deterministic regressions.
 
-**Status:** working local demonstration MVP. Groq generation/judging and a small
+**Status:** local demo plus a tested Render-ready hosted adapter. Groq generation/judging and a small
 real A/B run have been executed; OpenAI is implemented but its account smoke test
 returned quota exhaustion. No production deployment or child-safety claim.
+
+## Deploy on Render
+
+Use the tracked [render.yaml](render.yaml) Blueprint and
+[deployment guide](docs/deployment.md). The initial hosted mode is public
+mock-only, with no provider keys. It includes secure sessions, session-owned
+results/downloads, throttling, bounded background jobs, a health endpoint, and
+read-only recorded Groq evidence. The existing dark interface is reused.
+
+Optional owner-only live hosting requires a password hash and verified persistent
+storage configuration. Its SQLite daily ledger survives restarts and covers both
+configurations, judges, and retries. Defaults are $0.50 estimated and 50 attempts
+per UTC day, in addition to existing per-run limits. Free Render storage is
+ephemeral, so live hosting is blocked there. Prepared/tested is not a claim that
+an actual Render service has already been deployed.
 
 ## Present it live
 
@@ -166,16 +181,18 @@ that the deliberately degraded comparison exits 2. Mock artifacts are uploaded
 for inspection. GitHub-hosted execution passed for implementation commit
 `89398e6` on Python 3.11/3.13:
 [verified workflow run](https://github.com/Deep6908/VaaniBench-AI/actions/runs/44331956136).
-The local suite has 138 passing tests, including the demo and Groq integration.
+The hosted adapter adds security, isolation, persistence and deployment tests;
+current verification is recorded in docs/progress.md.
 
 ## Architecture and engineering decisions
 
 JSONL -> Pydantic validation -> provider adapter -> sequential runner -> metrics
 -> JSON/Markdown reports -> paired gate. OpenTelemetry spans accompany execution.
-The thin local web interface calls the same engine. There is no database, public
-paid-run endpoint, or deployment machinery. The server binds only to loopback,
-checks Host/Origin and a local request token, serializes comparisons, and caps a
-live server session at two configuration runs.
+The thin local and hosted web interfaces call the same engine. `demo` remains
+loopback-only. The separate Starlette/Uvicorn hosted adapter uses SQLite for
+sessions/jobs/daily accounting, exact public-origin checks, and owner-only live
+execution. Its deployment target is one instance/worker; it is not a distributed
+job queue or an authenticated multiuser SaaS service.
 
 See [architecture](docs/architecture.md), [component trade-offs](docs/engineering-notes.md),
 [checkpoint status](docs/progress.md), and the original
@@ -192,7 +209,7 @@ regression; this is not evidence that any real LLM improved.
 Fresh-environment installation and tests have been checked locally on Python 3.13
 using cached locked dependencies; Python 3.11/3.13 are also covered by passing
 remote CI. LLM judging has no human calibration. Hosted tracing, speech,
-production operations, and deployment remain out of scope. Persistent run.json is
+production service operation and a verified public deployment remain pending. Persistent run.json is
 written at completion; an interrupted process may leave only partial traces.
 No claims of production readiness, child safety, language-wide quality, model
 improvement, or cost savings are supported by this MVP.

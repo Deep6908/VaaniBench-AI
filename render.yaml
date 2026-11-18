@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: vaanibench-ai
+    runtime: python
+    repo: https://github.com/Deep6908/VaaniBench-AI
+    branch: main
+    plan: free
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    buildCommand: pip install uv==0.11.6 && uv sync --locked --no-dev
+    startCommand: uv run --no-sync uvicorn vaanibench.hosted:app --host 0.0.0.0 --port $PORT --workers 1 --no-access-log --no-proxy-headers
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.18
+      - key: VAANIBENCH_ENV
+        value: production
+      - key: VAANIBENCH_STATE_DIR
+        value: /tmp/vaanibench
+      - key: VAANIBENCH_LIVE_ENABLED
+        value: "false"
+      - key: VAANIBENCH_PERSISTENT_STORAGE
+        value: "false"

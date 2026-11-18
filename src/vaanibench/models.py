@@ -72,6 +72,7 @@ class APIAttempt(Contract):
     reserved_usd: Money
     estimated_cost_usd: Money | None = None
     accounted_usd: Money
+    daily_reservation_id: str | None = None
     latency_ms: Annotated[float, Field(ge=0)] = 0.0
 
 

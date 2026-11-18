@@ -65,6 +65,7 @@ class BudgetLedger:
         self.attempts: list[APIAttempt] = []
         self.scenario_id: str | None = None
         self.halted_reason: str | None = None
+        self.daily_guard = None
 
     @property
     def accounted_usd(self) -> Decimal:
@@ -90,6 +91,12 @@ class BudgetLedger:
         attempt = APIAttempt(number=len(self.attempts)+1, scenario_id=self.scenario_id,
             purpose=purpose, provider=provider, model=model, retry_index=retry_index,
             reserved_usd=amount, accounted_usd=amount)
+        if self.daily_guard:
+            try:
+                attempt.daily_reservation_id = self.daily_guard.reserve(attempt)
+            except ExecutionDenied as exc:
+                self.halted_reason = str(exc)
+                raise
         self.attempts.append(attempt)
         return attempt
 
@@ -106,5 +113,7 @@ class BudgetLedger:
         attempt.estimated_cost_usd = estimate
         if estimate is not None:
             attempt.accounted_usd = estimate
+        if self.daily_guard and attempt.daily_reservation_id:
+            self.daily_guard.reconcile(attempt.daily_reservation_id, attempt.accounted_usd)
         if self.accounted_usd > self.policy.max_run_usd:
             self.halted_reason = "spend_limit_reached"

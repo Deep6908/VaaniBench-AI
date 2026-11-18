@@ -52,7 +52,8 @@ def git_metadata(root: Path) -> tuple[str | None, bool | None]:
 def run_evaluation(dataset: Path, manifest: Path, config: Experiment, output: Path,
                    *, provider: Provider | None = None, judge: Provider | None = None,
                    clock: Callable[[], float] = time.perf_counter,
-                   on_event: Callable[[dict], None] | None = None) -> Run:
+                   on_event: Callable[[dict], None] | None = None, daily_guard=None,
+                   should_stop: Callable[[], bool] | None = None) -> Run:
     def emit(event: str, **details):
         if on_event:
             try:
@@ -61,6 +62,8 @@ def run_evaluation(dataset: Path, manifest: Path, config: Experiment, output: Pa
                 warnings.warn("Progress listener failed; evaluation continues.", RuntimeWarning)
     cases, dataset_manifest = validate_dataset(dataset, manifest)
     cases, ledger = preflight(cases, config)
+    if ledger:
+        ledger.daily_guard = daily_guard
     output.mkdir(parents=True, exist_ok=True)
     if any((output / name).exists() for name in ["run.json", "traces.jsonl"]):
         raise ValueError("output already contains a run; use a new directory")
@@ -96,6 +99,11 @@ def run_evaluation(dataset: Path, manifest: Path, config: Experiment, output: Pa
                         record_exception=False, set_status_on_exception=False) as span:
                     base = dict(scenario_id=case.id, scenario_hash=case_hash, language=case.language,
                         category=case.category, trace_id=format(span.get_span_context().trace_id, "032x"))
+                    if should_stop and should_stop():
+                        outcomes.append(CaseResult(**base, status="skipped", latency_ms=0.0, error_code="execution_cancelled"))
+                        emit("case_completed", result=outcomes[-1].model_dump(mode="json"))
+                        span.set_attribute("case.status", "skipped")
+                        continue
                     if ledger:
                         ledger.scenario_id = case.id
                         if ledger.halted_reason:
@@ -128,7 +136,9 @@ def run_evaluation(dataset: Path, manifest: Path, config: Experiment, output: Pa
                     else:
                         result = CaseResult(**base, status="ok", response=response,
                             latency_ms=max(0.0, (clock() - start) * 1000), metrics=evaluate(case, response.text))
-                        if judge:
+                        if judge and should_stop and should_stop():
+                            result.judge_error = "execution_cancelled"
+                        elif judge:
                             judge_start = clock()
                             with trace.tracer.start_as_current_span("judge", attributes={"judge.model": config.judge_model},
                                     record_exception=False, set_status_on_exception=False) as judge_span:

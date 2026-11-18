@@ -1,8 +1,8 @@
 # Architecture and decisions
 
 Status: implemented CLI-first MVP. See README.md for executed results and limits.
-The latest demonstration request adds a thin local frontend; public hosting
-infrastructure remains deferred. The rubric judge is optional
+The demonstration frontend now has a separate hosted adapter and Render Blueprint.
+Actual public deployment is not yet verified. The rubric judge is optional
 and uncalibrated; human calibration remains later work.
 
 ## Data flow
@@ -39,6 +39,9 @@ without a database, queue, orchestration framework, or live chat service.
 | costs.py | Versioned pricing, shared per-run attempt/USD ledger and reservations |
 | credentials.py | Explicit, allowlisted environment-file loading without secret output |
 | demo.py and web/ | Loopback HTTP adapter, bounded comparison jobs, progress and result interface |
+| hosted.py | Starlette/Uvicorn adapter, exact public origin, auth/CSRF boundary, owner-only live jobs |
+| hosted_auth.py | PBKDF2 owner password hashing and verification |
+| hosted_state.py | SQLite sessions/ownership, durable jobs, throttling, retention, daily API reservations |
 
 ## Contracts and boundaries
 
@@ -80,8 +83,11 @@ Deterministic mock baselines are distinct from real model baselines.
 CI will install locked dependencies, run tests, validate the dataset, execute a
 mock run, and enforce an intentional regression gate. Deployment initially serves
 sanitized precomputed reports with no API keys in the frontend or artifacts.
-Hosting is deferred under the latest scope. Document deployment, update,
-rollback, and a public smoke check before calling the demo deployed.
+render.yaml defines a single-instance public mock-only service. Deployment,
+restart, rollback and public smoke checks are documented in deployment.md.
+Live hosting requires owner authentication and confirmed persistent storage;
+attempt reservations are committed atomically before transport. An actual Render
+build and HTTPS check are still required before calling the demo deployed.
 
 ## Scope after the four-hour MVP
 

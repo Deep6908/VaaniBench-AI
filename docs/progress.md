@@ -45,3 +45,22 @@ mobile width, no page errors. Screenshots are under artifacts/demo-preview/.
 Local unit/integration suite: 138 tests. Published to
 https://github.com/Deep6908/VaaniBench-AI with remote CI passed for commit 89398e6:
 https://github.com/Deep6908/VaaniBench-AI/actions/runs/44331956136.
+
+## Deployment preparation
+
+Implemented a separate Starlette/Uvicorn hosted adapter, Render public mock-only
+Blueprint, health checks, exact host/origin validation, secure session cookies and
+CSRF, owner password hashing/sign-in/rotation/logout, and per-owner job/download
+access. Public mode never enables model calls, even if a provider key exists.
+
+SQLite persists job progress/results, rate limits and daily API reservations.
+Limits survive restart/password rotation; unknown spend is retained. Retention,
+bounded history, one-instance locking, cancellation/deadline checks before further
+HTTP attempts, and interrupted-job recovery are covered. Hosted refresh recovery
+and public read-only Groq evidence reuse the dark interface.
+
+Verification: 164 tests passed; hosted browser checks passed for mock presets, progress,
+refresh/resume, details, download, saved evidence, owner sign-in/out and mobile
+layout. A fresh runtime-only locked install and wheel build passed. No live model
+requests were made for this work. Actual Render build/HTTPS/restart verification
+is still pending; no paid service or disk was created. See deployment.md.

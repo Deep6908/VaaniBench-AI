@@ -10,6 +10,8 @@
 | Comparison | Paired case identity checks plus score/error/coverage gates | test_report.py and CLI degraded gate | Small sample, descriptive differences only; no statistical claim |
 | Tracing | Per-run/case/judge OTel spans; content-free local export | test_telemetry.py; inspect traces.jsonl | Local export only; backend delivery and retention not implemented |
 | CI | Locked install, tests, mock benchmark and intentional regression rejection | Local suite and passing remote Python 3.11/3.13 workflow, run 44331956136 | Live APIs and browser QA are intentionally separate from offline CI |
+| Hosted HTTP | Starlette/Uvicorn reuses comparison orchestration; public mock with optional owner-only live | test_hosted.py and hosted browser check | Single worker/instance; cloud deployment still needs an actual HTTPS smoke check |
+| Hosted state | SQLite persists sessions, job ownership/results, throttling and daily reservations | test_hosted_state.py, concurrent reservation and restart tests | Requires durable disk for live mode; interrupted jobs are not resumed automatically |
 
 Operational caveats: up to two budgeted retries for transient rate limits and
 selected server errors, with capped exponential backoff/jitter and Retry-After.
