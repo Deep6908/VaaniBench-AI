@@ -1,6 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let data, selected = new Set(), records = {baseline: {}, candidate: {}}, running = false, activeIds = [], jobId, completed = 0;
+let resultFilter = 'all';
 const element = (tag, text, cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
 const score = c => { const values = (c?.metrics || []).filter(m => m.score !== null).map(m => m.score); return c?.status === 'ok' && values.length ? values.reduce((a,b) => a+b,0)/values.length : null; };
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -13,19 +14,32 @@ function refreshControls() {
   $('mode-pill').textContent = $('mode').value.toUpperCase();
   $('live-options').hidden = !live;
   $('judge').disabled = !live || running;
+  $('mock-presets').hidden = live;
+  $('run-label').textContent = running ? 'Evaluating…' : selected.size === 0 ? 'Choose a conversation' : 'Run comparison';
+  $('run').classList.toggle('is-running', running);
+  $('run').setAttribute('aria-busy', String(running));
+  document.querySelectorAll('.scenario input').forEach(check => { check.disabled = running || (selected.size >= 6 && !check.checked); });
   $('run-note').textContent = live ? `Two separate runs. Up to $0.20 estimated combined; ${data.live_runs_remaining} live runs remain in this server session. No paid fallback.` : 'Mock events use presentation pacing. Reported request latency excludes that delay.';
 }
 function renderSelection() {
   const container = $('scenarios'); container.replaceChildren();
   for (const c of data.scenarios) {
+    const query = $('case-search').value.trim().toLowerCase();
+    if (query && !`${c.id} ${c.language} ${c.category} ${c.prompt}`.toLowerCase().includes(query)) continue;
     const row = element('label', undefined, 'scenario'); const check = element('input'); check.type = 'checkbox'; check.checked = selected.has(c.id); check.disabled = running;
-    check.addEventListener('change', () => { if (check.checked) selected.add(c.id); else selected.delete(c.id); refreshControls(); });
+    check.addEventListener('change', () => { if (check.checked && selected.size < 6) selected.add(c.id); else { selected.delete(c.id); check.checked = false; } row.classList.toggle('selected', check.checked); refreshControls(); });
+    row.classList.toggle('selected', check.checked);
     const copy = element('span'); copy.append(element('span', `${c.id} · ${c.language} · ${c.category}`, 'label'), element('span', c.prompt, 'description')); row.append(check, copy); container.append(row);
   } refreshControls();
 }
-function configPrompts() { for (const side of ['baseline','candidate']) $(''+side+'-prompt').textContent = data.configs.find(c => c.id === $(side).value)?.system_prompt || ''; }
+function configPrompts() {
+  for (const side of ['baseline','candidate']) $(''+side+'-prompt').textContent = data.configs.find(c => c.id === $(side).value)?.system_prompt || '';
+  $('preset-regression').setAttribute('aria-pressed', String($('baseline').value === 'mock-baseline' && $('candidate').value === 'mock-degraded'));
+  $('preset-repeat').setAttribute('aria-pressed', String($('baseline').value === 'mock-baseline' && $('candidate').value === 'mock-baseline'));
+}
 function modeChanged() {
   const mode = $('mode').value;
+  $('case-search').value = '';
   selected = new Set(mode === 'mock' ? data.default_ids : [data.scenarios[0].id]);
   for (const side of ['baseline','candidate']) {
     $(side).replaceChildren();
@@ -53,9 +67,13 @@ function renderCases() {
     const c = data.scenarios.find(c => c.id === id); const detail = element('details', undefined, 'casecard'); detail.dataset.id = id; detail.open = open.has(id);
     const heading = element('summary'); const title = element('div'); title.append(element('span', `${id} / ${c.language} / ${c.category}`, 'caseid'), element('span', c.prompt, 'caseprompt'));
     const a = records.baseline[id], b = records.candidate[id]; heading.append(title, element('span', `${a?.status || 'waiting'} → ${b?.status || 'waiting'}  +`, 'casebadge'));
+    const changed = a?.response && b?.response && a.response.text !== b.response.text;
+    const review = [a,b].some(c => c && c.status !== 'running' && (score(c) === null || c.status !== 'ok' || c.judge_error));
+    if (resultFilter === 'changed' && !changed || resultFilter === 'review' && !review) continue;
     const responses = element('div', undefined, 'responses'); responses.append(responseCard(a,'baseline'),responseCard(b,'candidate'));
     detail.append(heading, element('p', 'Rubric: '+c.rubric, 'rubric'), responses); $('case-results').append(detail);
   }
+  $('no-results').hidden = $('case-results').childElementCount > 0;
 }
 function updateScore(side) {
   const cases = Object.values(records[side]).filter(c => c.status !== 'running'); const scores = cases.map(score).filter(s => s !== null);
@@ -63,12 +81,14 @@ function updateScore(side) {
   $(side+'-meta').textContent = `${cases.length} responses · ${cases.filter(c => c.status === 'error').length} errors · ${cases.length-scores.length} unscored`;
 }
 async function start() {
+  resultFilter = 'all'; document.querySelectorAll('[data-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === 'all')));
   error(); running = true; activeIds = data.scenarios.filter(c => selected.has(c.id)).map(c => c.id); completed = 0; records = {baseline:{},candidate:{}};
   $('empty').hidden = true; $('results').hidden = false; $('downloads').replaceChildren(); $('decision').textContent = 'Running'; $('decision-card').className = ''; $('delta').textContent = 'Waiting for both runs';
   $('progress').max = activeIds.length*2; $('progress').value = 0; $('progress-count').textContent = `0 / ${activeIds.length*2}`; $('session-state').textContent = 'Evaluation in progress';
   $('result-note').textContent = $('mode').value === 'mock' ? 'Mock fixture: injected degradation demonstrates the gate. These scores are not evidence of real-model quality.' : 'Live run: token-based USD estimates are not invoices. Judge ratings remain subjective and uncalibrated.';
-  for (const id of ['mode','baseline','candidate','confirm-live','reset-cases']) $(id).disabled = true;
+  for (const id of ['mode','baseline','candidate','confirm-live','reset-cases','clear-cases','case-search','preset-regression','preset-repeat']) $(id).disabled = true;
   renderSelection(); renderCases(); updateScore('baseline'); updateScore('candidate');
+  if (window.innerWidth < 760) $('experiment').scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
   try {
     const response = await request('/api/runs', {method:'POST',headers:{'Content-Type':'application/json','X-VaaniBench-Token':data.token}, body:JSON.stringify({baseline:$('baseline').value,candidate:$('candidate').value,case_ids:activeIds,judge:$('judge').checked,confirm_live:$('confirm-live').checked})});
     jobId = response.job_id; let cursor = 0;
@@ -84,7 +104,7 @@ async function start() {
     }
   } catch (e) { error(e.message); $('status-label').textContent = 'Run did not finish'; $('decision').textContent = 'Incomplete'; $('session-state').textContent = 'Attention required'; }
   finally {
-    running = false; for (const id of ['mode','baseline','candidate','confirm-live','reset-cases']) $(id).disabled = false;
+    running = false; for (const id of ['mode','baseline','candidate','confirm-live','reset-cases','clear-cases','case-search','preset-regression','preset-repeat']) $(id).disabled = false;
     try { const fresh = await request('/api/bootstrap'); data.live_runs_remaining = fresh.live_runs_remaining; } catch (_) {}
     renderSelection(); refreshControls();
   }
@@ -101,6 +121,8 @@ function finish(result) {
   $('decision-card').className = decision.passed ? 'pass' : 'fail';
   $('delta').textContent = `${decision.paired_cases} paired · delta ${decision.mean_paired_delta === null ? 'n/a' : decision.mean_paired_delta.toFixed(3)}`;
   if (decision.failures.length) $('result-note').textContent += ' Gate: '+decision.failures.join('; ')+'.';
+  const firstChanged = activeIds.find(id => records.baseline[id]?.response?.text !== records.candidate[id]?.response?.text) || activeIds[0];
+  const firstDetail = [...$('case-results').children].find(n => n.dataset.id === firstChanged); if (firstDetail) firstDetail.open = true;
   for (const name of result.downloads) { const link = element('a',name); link.href = `/api/jobs/${jobId}/download/${name}`; link.download = name; $('downloads').append(link); }
 }
 async function init() {
@@ -109,7 +131,11 @@ async function init() {
     for (const provider of ['groq','openai']) { const option = $('mode').querySelector(`[value="${provider}"]`); option.disabled = !data.providers[provider]; option.textContent = provider === 'groq' ? `Groq · ${data.providers.groq ? 'live available' : 'unavailable'}` : `OpenAI · ${data.providers.openai ? 'live available' : 'unavailable'}`; }
     $('mode').addEventListener('change', modeChanged); for (const side of ['baseline','candidate']) $(side).addEventListener('change',configPrompts);
     $('confirm-live').addEventListener('change',refreshControls); $('run').addEventListener('click',start);
-    $('reset-cases').addEventListener('click',() => { selected = new Set(data.default_ids); renderSelection(); });
+    $('reset-cases').addEventListener('click',() => { selected = new Set(data.default_ids); $('case-search').value = ''; renderSelection(); });
+    $('clear-cases').addEventListener('click',() => { selected.clear(); renderSelection(); });
+    $('case-search').addEventListener('input',renderSelection);
+    for (const [id,candidate] of [['preset-regression','mock-degraded'],['preset-repeat','mock-baseline']]) $(id).addEventListener('click',() => { $('baseline').value='mock-baseline'; $('candidate').value=candidate; configPrompts(); refreshControls(); });
+    document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click',() => { resultFilter=button.dataset.filter; document.querySelectorAll('[data-filter]').forEach(b => b.setAttribute('aria-pressed', String(b===button))); renderCases(); }));
     modeChanged(); renderSelection();
   } catch (e) { error('Cannot load the local demo. '+e.message); }
 }

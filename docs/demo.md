@@ -11,6 +11,13 @@ uv run --no-sync vaanibench demo
 Open http://127.0.0.1:8765. Keep the terminal running; Ctrl+C stops it. Use
 `--port 8766` if the port is occupied. No account is needed for the mock demo.
 
+The dark interface starts with a quick preset: **Spot a regression** or **Check
+repeatability**. Choose a preset and press Run comparison. Expand **Customize
+comparison** only for manual configuration/judge options. **Choose conversations**
+provides search, clear/reset, and a six-case selection limit. Results can be
+filtered to changed responses or cases needing review; the first changed response
+opens automatically. Live confirmation remains visible outside advanced options.
+
 For deliberately enabled live mode, save GROQ_API_KEY locally in .env, confirm
 your provider plan/limits, then start:
 
