@@ -43,7 +43,7 @@ guaranteed quota/access. A terminal quota/authentication error stops the pair.
    judge's extra request and calibration limits. Real A/B may show no improvement.
 5. **4:00–5:00 — Inspect reproducibility.** Download JSON, reports, comparison,
    and traces. Show hashes, model/configuration, versions, safe failures, token
-   usage and USD estimates. Remote CI remains unverified until pushed and run.
+   usage and USD estimates. Show the passing GitHub Actions run linked in README.
 
 ## Fallback and limits
 

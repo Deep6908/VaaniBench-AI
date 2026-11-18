@@ -163,8 +163,10 @@ paths short; this directory is reserved for pytest and may be cleared by it.
 `.github/workflows/ci.yml` installs locked dependencies on Python 3.11/3.13,
 runs tests/validation, checks a passing repeated mock configuration, then asserts
 that the deliberately degraded comparison exits 2. Mock artifacts are uploaded
-for inspection. The equivalent workflow has been exercised locally; GitHub-hosted
-execution is pending a remote repository and push.
+for inspection. GitHub-hosted execution passed for implementation commit
+`89398e6` on Python 3.11/3.13:
+[verified workflow run](https://github.com/Deep6908/VaaniBench-AI/actions/runs/44331956136).
+The local suite has 138 passing tests, including the demo and Groq integration.
 
 ## Architecture and engineering decisions
 
@@ -188,8 +190,8 @@ degraded 5/12, and eight unscored cases in every run. The gate detects the injec
 regression; this is not evidence that any real LLM improved.
 
 Fresh-environment installation and tests have been checked locally on Python 3.13
-using cached locked dependencies. Python 3.11 and remote Actions still need CI
-verification. LLM judging has no human calibration. Hosted tracing, speech,
+using cached locked dependencies; Python 3.11/3.13 are also covered by passing
+remote CI. LLM judging has no human calibration. Hosted tracing, speech,
 production operations, and deployment remain out of scope. Persistent run.json is
 written at completion; an interrupted process may leave only partial traces.
 No claims of production readiness, child safety, language-wide quality, model

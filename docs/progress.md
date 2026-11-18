@@ -8,8 +8,8 @@
   equivalent of CI gates, executed mock benchmark, final README and limitations.
 
 Initial MVP verification was offline; subsequent live evidence appears below. Judge calibration:
-not performed. Hosted trace backend, speech, frontend, and deployment: deferred.
-GitHub Actions: workflow prepared; remote execution requires a GitHub repository.
+not performed. Hosted trace backend, speech, and public deployment: deferred.
+The later local frontend and passing remote workflow are described below.
 
 Offline results: 20 requests per configuration; 12 scored and eight unscored.
 Baseline/repeat: 12/12 deterministic case checks; degraded: 5/12. Repeated
@@ -42,4 +42,6 @@ exhaustion. All real calls were explicitly authorized and outside unit tests.
 
 Browser QA passed in Chrome: six-case mock run, progress, details, downloads,
 mobile width, no page errors. Screenshots are under artifacts/demo-preview/.
-Local unit/integration suite: 138 tests. Remote CI awaits the GitHub repository.
+Local unit/integration suite: 138 tests. Published to
+https://github.com/Deep6908/VaaniBench-AI with remote CI passed for commit 89398e6:
+https://github.com/Deep6908/VaaniBench-AI/actions/runs/44331956136.

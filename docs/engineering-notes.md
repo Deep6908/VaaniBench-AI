@@ -9,7 +9,7 @@
 | Judge | Opt-in rubric ratings with strict 1–5 schema and separate errors | tests use fake judge; see judging.md | No human calibration or ground-truth claim |
 | Comparison | Paired case identity checks plus score/error/coverage gates | test_report.py and CLI degraded gate | Small sample, descriptive differences only; no statistical claim |
 | Tracing | Per-run/case/judge OTel spans; content-free local export | test_telemetry.py; inspect traces.jsonl | Local export only; backend delivery and retention not implemented |
-| CI | Locked install, tests, mock benchmark and intentional regression rejection | workflow plus locally executed equivalent | Remote CI not verified until pushed and run |
+| CI | Locked install, tests, mock benchmark and intentional regression rejection | Local suite and passing remote Python 3.11/3.13 workflow, run 44331956136 | Live APIs and browser QA are intentionally separate from offline CI |
 
 Operational caveats: up to two budgeted retries for transient rate limits and
 selected server errors, with capped exponential backoff/jitter and Retry-After.
