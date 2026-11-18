@@ -1,0 +1,7 @@
+{
+  "dataset_version": "0.1.0",
+  "schema_version": "1.1",
+  "sha256": "f00e0ebc21535082094c13035e6d61e42527fe084dc5d163f5541113001beab2",
+  "case_count": 20,
+  "provenance": "Synthetic hand-authored scenarios; no real child data; English, Hindi, and romanized Hindi-English. Not representative or independently language-reviewed."
+}

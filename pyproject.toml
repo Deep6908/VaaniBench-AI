@@ -7,7 +7,10 @@ name = "vaanibench"
 version = "0.1.0"
 description = "Reproducible conversational AI evaluation and observability"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2.10,<3"]
+dependencies = ["pydantic>=2.10,<3", "opentelemetry-sdk>=1.30,<2"]
+
+[project.scripts]
+vaanibench = "vaanibench.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8.3,<10"]
@@ -17,4 +20,4 @@ packages = ["src/vaanibench"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--import-mode=importlib", "-ra"]
+addopts = ["--import-mode=importlib", "-ra", "--basetemp=.pytest-tmp"]

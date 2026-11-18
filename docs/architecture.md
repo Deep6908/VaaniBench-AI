@@ -1,6 +1,9 @@
 # Architecture and decisions
 
-Status: proposed MVP architecture; modules are placeholders until implemented.
+Status: implemented CLI-first MVP. See README.md for executed results and limits.
+The latest execution brief supersedes the original deployment plan: no frontend
+or hosting infrastructure is required for this MVP. The rubric judge is optional
+and uncalibrated; human calibration remains later work.
 
 ## Data flow
 
@@ -17,8 +20,8 @@ flowchart LR
   Reports --> Demo[Read-only deployed demo]
 ```
 
-The Python CLI is the system of record. A web demo displays sanitized, precomputed
-reports; it does not expose a public endpoint for spending API credits. Start
+The Python CLI is the system of record. A future web demo could display sanitized, precomputed
+reports without exposing a public endpoint for spending API credits. Start
 without a database, queue, orchestration framework, or live chat service.
 
 ## Module responsibilities
@@ -69,7 +72,7 @@ Deterministic mock baselines are distinct from real model baselines.
 CI will install locked dependencies, run tests, validate the dataset, execute a
 mock run, and enforce an intentional regression gate. Deployment initially serves
 sanitized precomputed reports with no API keys in the frontend or artifacts.
-Choose hosting after the offline pipeline works. Document deployment, update,
+Hosting is deferred under the latest scope. Document deployment, update,
 rollback, and a public smoke check before calling the demo deployed.
 
 ## Scope after the four-hour MVP

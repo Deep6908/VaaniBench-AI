@@ -1,5 +1,11 @@
 # Milestone 1: trusted inputs and an offline evaluation loop
 
+Status: implemented and tested. This file preserves the original learning
+exercises; the latest execution brief authorizes automatic implementation.
+The dataset now has 20 scenarios. Schema 1.1 adds typed optional deterministic
+checks; schema 1.0 remains loadable without checks. Rubrics remain independent
+from deterministic checks, and semantic tasks may be unscored deterministically.
+
 ## How we will work
 
 You implement one small checkpoint at a time. Your mentor explains the design,

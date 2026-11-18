@@ -1,4 +1,9 @@
-# Four-hour build plan
+# Original four-hour build plan (superseded schedule)
+
+The latest execution brief allows one five-hour usage window, asks the mentor to
+implement and explain automatically, expands the dataset to 20 scenarios, and
+defers frontend/deployment infrastructure. The historical schedule below records
+the original proposal. Current status lives in docs/progress.md and README.md.
 
 This is a time budget, not a promise that every feature will be production ready.
 The target is a tested evaluation MVP and a deployed read-only demo. Preserve
