@@ -36,3 +36,8 @@ Before claiming calibrated judging:
    using any judge-derived regression threshold.
 
 The current fake-judge tests establish parsing and error handling only.
+
+Annotation-pack and agreement commands now implement this workflow without
+manufacturing labels. See evaluation-protocol.md. They preserve split identity,
+blind reviewer packets to model/judge identity, and reject incomplete or duplicate
+human ratings. This tooling does not mean the judge has been calibrated.

@@ -2,13 +2,15 @@
 const $ = id => document.getElementById(id);
 let data, selected = new Set(), records = {baseline: {}, candidate: {}}, running = false, activeIds = [], jobId, completed = 0;
 let resultFilter = 'all';
-const busyControls = ['mode','baseline','candidate','confirm-live','reset-cases','clear-cases','case-search','preset-regression','preset-repeat','owner-auth','recorded-evidence'];
+const busyControls = ['mode','baseline','candidate','confirm-live','reset-cases','clear-cases','case-search','preset-regression','preset-repeat','owner-auth','recorded-evidence','history-search','history-status','history-refresh','history-baseline','history-candidate','history-compare'];
 const element = (tag, text, cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
 const score = c => { const values = (c?.metrics || []).filter(m => m.score !== null).map(m => m.score); return c?.status === 'ok' && values.length ? values.reduce((a,b) => a+b,0)/values.length : null; };
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function request(url, options) { const response = await fetch(url, options); const value = await response.json(); if (!response.ok) throw new Error(value.error || 'Request failed'); return value; }
 function error(message) { $('error').textContent = message || ''; $('error').hidden = !message; }
 function refreshControls() {
+  $('cancel-run').hidden = !data.hosted || !running || !jobId;
+  document.querySelectorAll('#history-list button').forEach(button=>{button.disabled=running;});
   const live = $('mode').value !== 'mock';
   $('selected-count').textContent = `${selected.size} / 6`;
   $('run').disabled = running || selected.size < 1 || selected.size > 6 || (live && (!$('confirm-live').checked || data.live_runs_remaining < 2));
@@ -67,7 +69,7 @@ function renderCases() {
   const open = new Set([...$('case-results').querySelectorAll('details[open]')].map(n => n.dataset.id));
   $('case-results').replaceChildren();
   for (const id of activeIds) {
-    const c = data.scenarios.find(c => c.id === id); const detail = element('details', undefined, 'casecard'); detail.dataset.id = id; detail.open = open.has(id);
+    const c = data.scenarios.find(c => c.id === id) || {language:records.baseline[id]?.language || 'unknown',category:records.baseline[id]?.category || 'unknown',prompt:'Scenario is absent from the current catalog; inspect its saved run.'}; const detail = element('details', undefined, 'casecard'); detail.dataset.id = id; detail.open = open.has(id);
     const heading = element('summary'); const title = element('div'); title.append(element('span', `${id} / ${c.language} / ${c.category}`, 'caseid'), element('span', c.prompt, 'caseprompt'));
     const a = records.baseline[id], b = records.candidate[id]; heading.append(title, element('span', `${a?.status || 'waiting'} → ${b?.status || 'waiting'}  +`, 'casebadge'));
     const changed = a?.response && b?.response && a.response.text !== b.response.text;
@@ -85,7 +87,7 @@ function updateScore(side) {
 }
 async function start() {
   resultFilter = 'all'; document.querySelectorAll('[data-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === 'all')));
-  error(); running = true; activeIds = data.scenarios.filter(c => selected.has(c.id)).map(c => c.id); completed = 0; records = {baseline:{},candidate:{}};
+  error(); running = true; jobId=null; activeIds = data.scenarios.filter(c => selected.has(c.id)).map(c => c.id); completed = 0; records = {baseline:{},candidate:{}};
   $('empty').hidden = true; $('results').hidden = false; $('downloads').replaceChildren(); $('decision').textContent = 'Running'; $('decision-card').className = ''; $('delta').textContent = 'Waiting for both runs';
   $('progress').max = activeIds.length*2; $('progress').value = 0; $('progress-count').textContent = `0 / ${activeIds.length*2}`; $('session-state').textContent = 'Evaluation in progress';
   $('result-note').textContent = $('mode').value === 'mock' ? 'Mock fixture: injected degradation demonstrates the gate. These scores are not evidence of real-model quality.' : 'Live run: token-based USD estimates are not invoices. Judge ratings remain subjective and uncalibrated.';
@@ -93,8 +95,13 @@ async function start() {
   renderSelection(); renderCases(); updateScore('baseline'); updateScore('candidate');
   if (window.innerWidth < 760) $('experiment').scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
   try {
-    const response = await request('/api/runs', {method:'POST',headers:{'Content-Type':'application/json','X-VaaniBench-Token':data.token}, body:JSON.stringify({baseline:$('baseline').value,candidate:$('candidate').value,case_ids:activeIds,judge:$('judge').checked,confirm_live:$('confirm-live').checked})});
+    const body=JSON.stringify({baseline:$('baseline').value,candidate:$('candidate').value,case_ids:activeIds,judge:$('judge').checked,confirm_live:$('confirm-live').checked});
+    let pending; try { pending=JSON.parse(sessionStorage.getItem('vaanibench_submission')); } catch (_) {}
+    const key=pending?.body===body ? pending.key : crypto.randomUUID();
+    if(data.hosted) sessionStorage.setItem('vaanibench_submission',JSON.stringify({body,key}));
+    const response = await request('/api/runs', {method:'POST',headers:{'Content-Type':'application/json','X-VaaniBench-Token':data.token,'Idempotency-Key':key},body});
     jobId = response.job_id;
+    sessionStorage.removeItem('vaanibench_submission'); refreshControls();
     if (data.hosted) sessionStorage.setItem('vaanibench_active_job',JSON.stringify({id:jobId,ids:activeIds,mode:$('mode').value,baseline:$('baseline').value,candidate:$('candidate').value,judge:$('judge').checked}));
     await watchJob();
   } catch (e) { error(e.message); $('status-label').textContent = 'Run did not finish'; $('decision').textContent = 'Incomplete'; $('session-state').textContent = 'Attention required'; }
@@ -112,7 +119,7 @@ async function watchJob() {
         if (event.event === 'case_started') { records[event.side][event.scenario_id] = {status:'running'}; $('status-label').textContent = `${event.side === 'baseline' ? 'A / Baseline' : 'B / Candidate'} · ${event.scenario_id}`; }
         if (event.event === 'case_completed') { records[event.side][event.result.scenario_id] = event.result; completed++; $('progress').value = completed; $('progress-count').textContent = `${completed} / ${activeIds.length*2}`; updateScore(event.side); }
       } renderCases();
-      if (snapshot.status === 'failed' || snapshot.status === 'interrupted') {
+      if (['failed','interrupted','cancelled'].includes(snapshot.status)) {
         if (data.hosted) sessionStorage.removeItem('vaanibench_active_job');
         throw new Error(snapshot.error || 'Evaluation was interrupted. Start a new comparison.');
       }
@@ -120,6 +127,28 @@ async function watchJob() {
       await wait(250);
     }
     if (data.hosted) sessionStorage.removeItem('vaanibench_active_job');
+}
+
+async function loadHistory() {
+  const ops=await request('/api/operations');
+  $('operations-summary').textContent=`Retained jobs: ${ops.retained_jobs}. Mock cases: ${ops.by_mode.mock}; live cases: ${ops.by_mode.live}. Daily API attempts: ${ops.daily_usage.calls}/${ops.daily_usage.max_calls}; accounted USD ${ops.daily_usage.accounted_usd}/${ops.daily_usage.max_usd}. ${ops.alerts.join(' ')}`;
+  const result=await request('/api/history?q='+encodeURIComponent($('history-search').value)+'&status='+encodeURIComponent($('history-status').value));
+  $('history-list').replaceChildren(); $('history-baseline').replaceChildren(); $('history-candidate').replaceChildren();
+  for(const job of result.jobs) {
+    const row=element('p'); row.append(element('span',`${new Date(job.created*1000).toLocaleString()} · ${job.status} · ${Object.values(job.configs).join(' / ')} `));
+    const open=element('button','Open','auth-button'); open.type='button'; open.disabled=running;
+    open.addEventListener('click',async()=>{try{
+      const snapshot=await request('/api/jobs/'+job.id); if(!snapshot.result) throw new Error(snapshot.error || 'No completed results available');
+      jobId=job.id; activeIds=snapshot.result.runs.baseline.cases.map(c=>c.scenario_id);
+      records=Object.fromEntries(Object.entries(snapshot.result.runs).map(([side,run])=>[side,Object.fromEntries(run.cases.map(c=>[c.scenario_id,c]))]));
+      resultFilter='all'; document.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter==='all')));
+      $('empty').hidden=true; $('results').hidden=false; $('downloads').replaceChildren();
+      $('result-note').textContent='Saved evaluation · no new API calls. Review configuration and scoring coverage.';
+      renderCases(); updateScore('baseline'); updateScore('candidate'); finish(snapshot.result);
+    }catch(e){error(e.message);}}); row.append(open); $('history-list').append(row);
+    if(job.status==='completed') for(const side of ['baseline','candidate']){const option=element('option',`${job.id.slice(0,8)} · ${job.configs.candidate}`);option.value=job.id;$('history-'+side).append(option);}
+  }
+  $('history-compare').disabled=!$('history-baseline').options.length;
 }
 
 function finish(result) {
@@ -153,6 +182,18 @@ async function init() {
     $('owner-auth').hidden = !data.hosted || !data.login_available;
     $('owner-auth').textContent = data.authenticated ? 'Sign out' : 'Owner sign-in';
     $('recorded-evidence').hidden = !data.evidence_available;
+    $('history-panel').hidden=!data.hosted || !data.authenticated;
+    $('cancel-run').addEventListener('click',async()=>{try{
+      $('cancel-run').disabled=true;
+      await request('/api/jobs/'+jobId+'/cancel',{method:'POST',headers:{'X-VaaniBench-Token':data.token}});
+      $('status-label').textContent='Cancellation requested; an active request may finish first.';
+    }catch(e){error(e.message);}finally{$('cancel-run').disabled=false;}});
+    $('history-refresh').addEventListener('click',()=>loadHistory().catch(e=>error(e.message)));
+    $('history-compare').addEventListener('click',async()=>{try{
+      const result=await request('/api/compare',{method:'POST',headers:{'Content-Type':'application/json','X-VaaniBench-Token':data.token},body:JSON.stringify({baseline_job:$('history-baseline').value,candidate_job:$('history-candidate').value,baseline_side:'candidate',candidate_side:'candidate'})});
+      $('history-comparison').textContent=`${result.passed?'Pass':'Blocked'} · ${result.paired_cases} paired scored cases · delta ${result.mean_paired_delta ?? 'unknown'}. ${result.failures.join('; ')}`;
+    }catch(e){$('history-comparison').textContent='Cannot compare: '+e.message+' (identical dataset, case selection and scoring settings are required).';}});
+    if(data.hosted && data.authenticated) await loadHistory();
     $('owner-auth').addEventListener('click',async () => {
       if (!data.authenticated) { $('login-error').hidden=true; $('owner-dialog').showModal(); return; }
       try { await request('/api/logout',{method:'POST',headers:{'X-VaaniBench-Token':data.token}}); sessionStorage.removeItem('vaanibench_active_job'); location.reload(); } catch(e) { error(e.message); }

@@ -1,0 +1,362 @@
+{
+  "vb-001": {
+    "split": "development",
+    "family": "original-vb-001",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-002": {
+    "split": "development",
+    "family": "original-vb-002",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-003": {
+    "split": "development",
+    "family": "original-vb-003",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-004": {
+    "split": "development",
+    "family": "original-vb-004",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-005": {
+    "split": "development",
+    "family": "original-vb-005",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-006": {
+    "split": "development",
+    "family": "original-vb-006",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-007": {
+    "split": "development",
+    "family": "original-vb-007",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-008": {
+    "split": "development",
+    "family": "original-vb-008",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-009": {
+    "split": "development",
+    "family": "original-vb-009",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-010": {
+    "split": "development",
+    "family": "original-vb-010",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-011": {
+    "split": "development",
+    "family": "original-vb-011",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-012": {
+    "split": "development",
+    "family": "original-vb-012",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-013": {
+    "split": "development",
+    "family": "original-vb-013",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-014": {
+    "split": "development",
+    "family": "original-vb-014",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-015": {
+    "split": "development",
+    "family": "original-vb-015",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-016": {
+    "split": "development",
+    "family": "original-vb-016",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-017": {
+    "split": "development",
+    "family": "original-vb-017",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-018": {
+    "split": "development",
+    "family": "original-vb-018",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-019": {
+    "split": "development",
+    "family": "original-vb-019",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-020": {
+    "split": "development",
+    "family": "original-vb-020",
+    "review_status": "pending",
+    "provenance": "Original synthetic MVP fixture; not independently reviewed"
+  },
+  "vb-021": {
+    "split": "calibration",
+    "family": "factual-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-022": {
+    "split": "calibration",
+    "family": "factual-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-023": {
+    "split": "calibration",
+    "family": "factual-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-024": {
+    "split": "heldout",
+    "family": "factual-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-025": {
+    "split": "heldout",
+    "family": "factual-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-026": {
+    "split": "heldout",
+    "family": "factual-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-027": {
+    "split": "heldout",
+    "family": "factual-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-028": {
+    "split": "heldout",
+    "family": "factual-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-029": {
+    "split": "calibration",
+    "family": "instruction-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-030": {
+    "split": "calibration",
+    "family": "instruction-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-031": {
+    "split": "calibration",
+    "family": "instruction-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-032": {
+    "split": "heldout",
+    "family": "instruction-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-033": {
+    "split": "heldout",
+    "family": "instruction-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-034": {
+    "split": "heldout",
+    "family": "instruction-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-035": {
+    "split": "heldout",
+    "family": "instruction-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-036": {
+    "split": "heldout",
+    "family": "instruction-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-037": {
+    "split": "calibration",
+    "family": "context-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-038": {
+    "split": "calibration",
+    "family": "context-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-039": {
+    "split": "calibration",
+    "family": "context-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-040": {
+    "split": "heldout",
+    "family": "context-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-041": {
+    "split": "heldout",
+    "family": "context-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-042": {
+    "split": "heldout",
+    "family": "context-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-043": {
+    "split": "heldout",
+    "family": "context-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-044": {
+    "split": "heldout",
+    "family": "context-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-045": {
+    "split": "calibration",
+    "family": "uncertainty-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-046": {
+    "split": "calibration",
+    "family": "uncertainty-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-047": {
+    "split": "calibration",
+    "family": "uncertainty-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-048": {
+    "split": "heldout",
+    "family": "uncertainty-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-049": {
+    "split": "heldout",
+    "family": "uncertainty-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-050": {
+    "split": "heldout",
+    "family": "uncertainty-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-051": {
+    "split": "heldout",
+    "family": "uncertainty-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-052": {
+    "split": "heldout",
+    "family": "uncertainty-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-053": {
+    "split": "calibration",
+    "family": "privacy-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-054": {
+    "split": "calibration",
+    "family": "privacy-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-055": {
+    "split": "calibration",
+    "family": "privacy-v0",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-056": {
+    "split": "heldout",
+    "family": "privacy-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-057": {
+    "split": "heldout",
+    "family": "privacy-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-058": {
+    "split": "heldout",
+    "family": "privacy-v1",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-059": {
+    "split": "heldout",
+    "family": "privacy-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  },
+  "vb-060": {
+    "split": "heldout",
+    "family": "privacy-v2",
+    "review_status": "pending",
+    "provenance": "Assistant-authored synthetic draft; independent bilingual review required"
+  }
+}

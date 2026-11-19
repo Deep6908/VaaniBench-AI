@@ -140,7 +140,7 @@ is zero. Verify account billing separately.
 
 ## Hosted execution
 
-The hosted adapter attaches a SQLite daily guard to the existing per-run ledger.
+The hosted adapter attaches a SQLite or PostgreSQL daily guard to the existing per-run ledger.
 Reservations are committed before every generation/judge/retry transport call;
 known usage reconciles them. Unknown usage and process interruption never trigger
 an automatic refund. Defaults: $0.50 estimated and 50 attempts per UTC day across
@@ -148,3 +148,16 @@ the deployment. CLI/local-demo calls retain their existing per-run controls and
 are outside the hosted daily ledger. See deployment.md for owner authentication,
 persistent-storage requirements, and reset/recovery semantics. The public Blueprint
 does not enable live execution or configure provider secrets.
+
+External PostgreSQL also persists sessions, reports and idempotency keys; a
+free/ephemeral web server can therefore keep the accounting across restart.
+Production connections require TLS and a direct/session-pool connection, not
+transaction pooling. A singleton lease protects recovery from another active
+instance. Cancellation and lease loss prevent subsequent attempts; an in-flight
+request may still complete and remain accounted. See reliability.md.
+
+`vaanibench benchmark` defaults to a dry plan. Explicit case selection and the
+plan hash are required to execute; live execution additionally requires --live.
+One aggregate guard covers both configurations, all repeats, retries and judges.
+Defaults are $0.10 and 20 attempts for the entire benchmark. A budget-limited
+benchmark can be incomplete; incomplete coverage is reported, never a pass claim.

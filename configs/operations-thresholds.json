@@ -1,0 +1,6 @@
+{
+  "minimum_request_samples": 20,
+  "error_rate_warning": 0.05,
+  "p95_latency_ms_warning": 10000,
+  "daily_budget_fraction_warning": 0.8
+}

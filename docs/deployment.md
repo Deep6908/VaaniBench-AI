@@ -8,9 +8,11 @@ Groq benchmark, and download their own artifacts. No provider credentials are
 needed. Starlette/Uvicorn is the hosted HTTP layer; the existing CLI and local
 demo remain available. Model generation/evaluation logic is shared.
 
-Prepared and locally tested does not mean deployed. An actual Render build,
-assigned URL, HTTPS smoke check, and restart check are required before claiming
-the hosted service works.
+The public mock service is deployed at https://vaanibench-ai.onrender.com;
+homepage, health, configuration and a mock evaluation were verified on November
+18, 2026. Owner-live extensions are not yet deployed/configured. Follow
+[reliability.md](reliability.md) for external PostgreSQL on ephemeral hosting,
+configuration isolation, migrations, backup/restore and the verification checklist.
 
 ## Deploy the public demo
 
@@ -46,6 +48,8 @@ accidentally present in the environment.
 
 ## Optional owner-only live execution
 
+For external PostgreSQL (no persistent web disk), use reliability.md instead.
+The instructions below describe the alternative persistent SQLite disk setup.
 This is a deliberate second deployment configuration. Keep it disabled for the
 first public release. Use a separately configured web service for owner-live mode,
 copying the Blueprint's build/start/health settings and production/Python settings.

@@ -42,3 +42,57 @@ jobs:
           name: mock-evaluation-python-${{ matrix.python }}
           path: artifacts/
           retention-days: 7
+  postgres-contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: vaanibench_test
+          POSTGRES_PASSWORD: local-only-throwaway-test
+          POSTGRES_DB: vaanibench_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vaanibench_test -d vaanibench_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      VAANIBENCH_TEST_POSTGRES_URL: postgresql://vaanibench_test:local-only-throwaway-test@127.0.0.1:5432/vaanibench_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install uv==0.11.6
+      - run: uv sync --locked
+      - run: uv run --no-sync pytest tests/test_postgres_integration.py -q
+      - name: Verify PostgreSQL backup and restore in separate test database
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_CONTAINER" pg_dump -U vaanibench_test -d vaanibench_test -Fc -n vaanibench --no-owner --no-acl -f /tmp/state.dump
+          docker exec "$PG_CONTAINER" createdb -U vaanibench_test vaanibench_restore_test
+          docker exec "$PG_CONTAINER" pg_restore -U vaanibench_test --no-owner --no-acl --exit-on-error -d vaanibench_restore_test /tmp/state.dump
+          query='SELECT (SELECT count(*) FROM vaanibench.attempts),(SELECT count(*) FROM vaanibench.artifacts),(SELECT max(version) FROM vaanibench.schema_migrations)'
+          source=$(docker exec "$PG_CONTAINER" psql -U vaanibench_test -d vaanibench_test -Atc "$query")
+          restored=$(docker exec "$PG_CONTAINER" psql -U vaanibench_test -d vaanibench_restore_test -Atc "$query")
+          test "$source" = "$restored"
+  browser-mock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install uv==0.11.6
+      - run: uv sync --locked
+      - run: uv run --no-sync playwright install --with-deps chromium
+      - name: Mock hosted browser workflow
+        run: |
+          uv run --no-sync python scripts/serve_browser_fixture.py > /tmp/vaanibench-browser.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8771/healthz; then break; fi
+            sleep 1
+          done
+          uv run --no-sync python scripts/check_demo_browser.py --url http://127.0.0.1:8771 --check-hosted --check-owner-ui

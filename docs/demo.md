@@ -77,9 +77,19 @@ JavaScript errors were verified in headless Chrome. To reproduce against an
 already running mock-only server:
 
 ```powershell
-uv run --with playwright python scripts/check_demo_browser.py --browser "C:\Program Files\Google\Chrome\Application\chrome.exe"
+uv run --no-sync python scripts/check_demo_browser.py --browser "C:\Program Files\Google\Chrome\Application\chrome.exe"
 ```
 
-Playwright is an optional QA tool, not an app dependency. Screenshots go under
+Playwright is a locked development/QA dependency, excluded by --no-dev. Screenshots go under
 artifacts/demo-preview/. Unit tests block network and inject provider transports;
 authorized live smoke tests are separate from the suite.
+
+For owner history, saved comparisons, cancellation and refreshed hosted jobs,
+start `uv run --no-sync python scripts/serve_browser_fixture.py`, then use:
+
+```powershell
+uv run --no-sync python scripts/check_demo_browser.py --url http://127.0.0.1:8771 --check-hosted --check-owner-ui --browser "C:\Program Files\Google\Chrome\Application\chrome.exe"
+```
+
+The fixture is mock-only and uses a documented throwaway owner password. See
+reliability.md for the full demo and external PostgreSQL configuration.

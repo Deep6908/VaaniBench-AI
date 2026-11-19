@@ -1,5 +1,41 @@
 # Implementation checklist
 
+## Current extension status — November 19, 2026
+
+This section supersedes historical checkpoint wording below. The public Render
+mock deployment was verified on November 18 (homepage, /healthz, safe bootstrap,
+one hosted mock comparison). Extension code is included in this release;
+owner-live Render configuration remains pending.
+Unrelated .vscode changes are preserved. No real API calls were made in this work.
+
+| Phase | Implemented | Verification / remaining dependency |
+| --- | --- | --- |
+| 1: durable owner-live | Shared SQLite/PostgreSQL SQL boundary; additive versioned migrations; atomic spending/admission/idempotency; session singleton lease; persistent report downloads; cancellation and conservative restart recovery | Final suite: 185 tests passed including real disposable PostgreSQL checks. Owner sessions/downloads/budgets survived new scratch directory. External database setup and hosted restart smoke pending. |
+| 2: evidence | Separate balanced 60-case draft (20 development, 15 calibration, 25 heldout); family split checks; blinded annotation templates; agreement analysis; approval-gated repeated A/B benchmark with aggregate cap and scenario-cluster uncertainty | Offline workflow tests passed. All new cases remain independently unreviewed. No human labels/calibration or new real benchmark exists. |
+| 3: operations | Optional HTTPS OTLP export with safe failure diagnostics; generation spans; owner history/search/comparison; operational snapshot/threshold warnings; CI PostgreSQL/browser jobs | Hosted browser QA passed including cancellation, owner history, saved comparison, downloads, refresh and mobile layout. Fake-export tests, fresh runtime-only install/imports, credential scan and PostgreSQL dump/restore drill passed. Real collector, hosted alerts/uptime, release rollback exercise pending. |
+
+Architecture choice: preserve the existing runner, providers, evaluator and dark UI.
+Use psycopg behind existing state methods, not a new ORM/backend framework.
+Store completed artifacts in PostgreSQL so ephemeral web storage is acceptable.
+Retain a single hosted instance rather than claiming a distributed durable queue.
+
+Setup and reproducible demo: reliability.md. Dataset/reviewer/benchmark protocol:
+evaluation-protocol.md. External account provisioning, live spending, independent
+review and production verification are explicit checkpoints, not completed claims.
+
+Verification notes: one upstream Starlette/AnyIO deprecation warning; all provider
+transports were fake. PostgreSQL 17 backup restored 2 spending reservations and
+16 artifacts into a separate empty local database. New CI jobs are defined;
+consult GitHub Actions for the published release's remote results. Browser QA
+found and fixed a stale job-ID cancellation race without relaxing CSP.
+
+External database checkpoint: the user's Supabase Oregon session pooler passed
+an encrypted read-only connection using the application's driver settings. No
+schema/table changes or model calls were made; owner-live cloud acceptance is
+still pending. Database credentials remain outside the repository.
+
+## Historical checkpoints
+
 - [x] Checkpoint 1: strict schema, JSONL loader, version/hash manifest, 20 scenarios.
 - [x] Checkpoint 2: mock provider, runner, deterministic metrics, CLI, results/reports.
 - [x] Checkpoint 3: transport-tested live adapter, optional rubric judge, paired A/B.

@@ -90,7 +90,8 @@ def run_evaluation(dataset: Path, manifest: Path, config: Experiment, output: Pa
     emit("run_started", run_id=run_id, config_name=config.name, total=len(cases))
     try:
         with trace.tracer.start_as_current_span("evaluation", attributes={"run.id": run_id,
-                "dataset.version": dataset_manifest.dataset_version, "provider": config.provider}) as parent:
+                "dataset.version": dataset_manifest.dataset_version, "provider": config.provider},
+                record_exception=False,set_status_on_exception=False) as parent:
             for case in cases:
                 emit("case_started", scenario_id=case.id)
                 case_hash = hashlib.sha256(case.model_dump_json().encode()).hexdigest()
@@ -115,7 +116,12 @@ def run_evaluation(dataset: Path, manifest: Path, config: Experiment, output: Pa
                     start = clock()
                     attempts_before = len(ledger.attempts) if ledger else 0
                     try:
-                        response = provider.generate(case.messages)
+                        with trace.tracer.start_as_current_span('generation',attributes={'api.provider':config.provider,'api.model':config.model},
+                                record_exception=False,set_status_on_exception=False) as generation_span:
+                            try: response = provider.generate(case.messages)
+                            except Exception:
+                                generation_span.set_status(Status(StatusCode.ERROR,'generation_failed'))
+                                raise
                     except ExecutionDenied as exc:
                         status = "error" if ledger and len(ledger.attempts) > attempts_before else "skipped"
                         result = CaseResult(**base, status=status, error_code=str(exc),

@@ -11,7 +11,7 @@ import tempfile
 import base64
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, ExitStack
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -45,6 +45,7 @@ class Settings:
     live_enabled: bool = False
     persistent_storage_confirmed: bool = False
     owner_password_hash: str = field(default="", repr=False)
+    database_url: str | None = field(default=None, repr=False)
     daily_usd: Decimal = Decimal("0.50")
     daily_calls: int = 50
     job_timeout_seconds: int = 180
@@ -61,9 +62,16 @@ class Settings:
             raise ValueError("Invalid daily limits")
         if not 30 <= self.job_timeout_seconds <= 600:
             raise ValueError("Invalid job timeout")
-        if self.live_enabled and (not self.owner_password_hash or not self.persistent_storage_confirmed):
+        if self.database_url:
+            database = urlsplit(self.database_url)
+            from urllib.parse import parse_qs
+            secure=parse_qs(database.query).get("sslmode", [""])[0] in {"require","verify-ca","verify-full"}
+            local_development=not self.production and database.hostname in {'localhost','127.0.0.1','::1'}
+            if database.scheme not in {"postgres", "postgresql"} or not database.hostname or not (secure or local_development):
+                raise ValueError("Configure a PostgreSQL session/direct URL with TLS")
+        if self.live_enabled and (not self.owner_password_hash or not (self.database_url or self.persistent_storage_confirmed)):
             raise ValueError("Live hosting requires owner authentication and confirmed persistent storage")
-        if self.production and self.live_enabled and (self.state_dir.is_relative_to(self.root) or self.state_dir.is_relative_to(Path(tempfile.gettempdir()).resolve())):
+        if self.production and self.live_enabled and not self.database_url and (self.state_dir.is_relative_to(self.root) or self.state_dir.is_relative_to(Path(tempfile.gettempdir()).resolve())):
             raise ValueError("Live production state must be on a persistent mount outside project and temporary storage")
         if self.owner_password_hash:
             parts = self.owner_password_hash.split("$")
@@ -80,6 +88,7 @@ class Settings:
             live_enabled=os.environ.get("VAANIBENCH_LIVE_ENABLED", "false") == "true",
             persistent_storage_confirmed=os.environ.get("VAANIBENCH_PERSISTENT_STORAGE", "false") == "true",
             owner_password_hash=os.environ.get("VAANIBENCH_OWNER_PASSWORD_HASH", ""),
+            database_url=os.environ.get("VAANIBENCH_DATABASE_URL") or None,
             daily_usd=Decimal(os.environ.get("VAANIBENCH_DAILY_USD", "0.50")),
             daily_calls=int(os.environ.get("VAANIBENCH_DAILY_CALLS", "50")))
 
@@ -106,15 +115,25 @@ def instance_lock(directory):
 class HostedService:
     def __init__(self, settings):
         self.settings = settings
-        self.store = StateStore(settings.state_dir, daily_usd=settings.daily_usd, daily_calls=settings.daily_calls)
+        self.store = StateStore(settings.state_dir, daily_usd=settings.daily_usd, daily_calls=settings.daily_calls,
+            database_url=settings.database_url, retention_seconds=7*86400 if settings.database_url else 3600)
         self.store.auth_revision(hashlib.sha256(settings.owner_password_hash.encode()).hexdigest())
         self.store.recover()
         self.store.cleanup()
         self.catalog = DemoController(settings.root, allow_live=settings.live_enabled, pace_seconds=0)
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="evaluation")
         self.stopping = threading.Event()
+        self.submission_lock = threading.Lock()
+        self.lease = None
 
-    def start(self, selection, session):
+    def start(self, selection, session, request_key=None):
+        with self.submission_lock:
+            fingerprint = hashlib.sha256(selection.model_dump_json().encode()).hexdigest()
+            existing = self.store.find_submission(session["owner"],request_key,fingerprint)
+            if existing: return existing
+            return self._start(selection,session,request_key,fingerprint)
+
+    def _start(self, selection, session, request_key, fingerprint):
         if self.stopping.is_set():
             raise RateLimited("Service is stopping. Try again shortly.")
         if len(set(selection.case_ids)) != len(selection.case_ids) or not set(selection.case_ids).issubset({c.id for c in self.catalog.cases}):
@@ -135,7 +154,7 @@ class HostedService:
             config.judge_model = ("openai/gpt-oss-20b" if config.provider == "groq" else "gpt-4.1-mini") if selection.judge else None
             config.judge_provider = config.provider if selection.judge else None
             preflight(self.catalog.cases, config)
-        job = self.store.create_job(session["owner"])
+        job = self.store.create_job(session["owner"],request_key=request_key,request_hash=fingerprint)
         try:
             self.executor.submit(self._work, job, configs)
         except RuntimeError:
@@ -145,13 +164,29 @@ class HostedService:
 
     def _work(self, job, configs):
         deadline = time.monotonic() + self.settings.job_timeout_seconds
-        cancelled = lambda:self.stopping.is_set() or time.monotonic() >= deadline
+        def cancelled():
+            if self.stopping.is_set() or time.monotonic() >= deadline: return True
+            if self.lease is not None:
+                try:
+                    # A lost singleton lease stops further calls, never reconnects
+                    # silently while another instance might own the database.
+                    with self.submission_lock:
+                        self.lease.execute("SELECT 1")
+                        self.lease.commit()
+                except Exception:
+                    self.stopping.set()
+                    return True
+            return self.store.cancelled(job)
         try:
             result = execute_comparison(self.settings.root, configs, self.settings.state_dir / "runs" / job,
                 on_event=lambda side,event:self.store.event(job,side,event), pace_seconds=self.settings.mock_pace_seconds,
                 daily_guard=self.store.daily_guard(job,stop_when=cancelled),
                 should_stop=cancelled)
-            self.store.finish(job, result=result)
+            artifacts={name:(self.settings.state_dir / "runs" / job / side / filename).read_text(encoding="utf-8")
+                for name,(side,filename) in DOWNLOADS.items()}
+            stopped=cancelled()
+            self.store.finish(job, result=result, artifacts=artifacts,
+                cancelled=stopped, error="Evaluation cancelled or interrupted; completed requests remain accounted." if stopped else None)
         except ExecutionDenied as exc:
             allowed = {"quota_exhausted", "http_401", "http_403", "resolved_model_pricing_mismatch", "daily_call_limit_reached", "daily_spend_limit_reached"}
             self.store.finish(job, error="Execution stopped: " + (str(exc) if str(exc) in allowed else "execution_denied"))
@@ -173,15 +208,17 @@ class BoundaryMiddleware(BaseHTTPMiddleware):
             if request.method in {"GET","HEAD"} and request.url.path.startswith("/api/"):
                 store = request.app.state.service.store
                 try:
-                    store.rate("api_reads",2400,60)
-                    identity = store.session(request.cookies.get(COOKIE))
-                    if identity: store.rate("read:"+identity["owner"],600,60)
+                    await asyncio.to_thread(store.rate,"api_reads",2400,60)
+                    identity = await asyncio.to_thread(store.session,request.cookies.get(COOKIE))
+                    request.state.identity=identity
+                    if identity: await asyncio.to_thread(store.rate,"read:"+identity["owner"],600,60)
                 except RateLimited:
                     return JSONResponse({"error":"Read rate limit reached. Try again shortly."},status_code=429,headers=SECURITY | {"Retry-After":"60"})
             if request.method not in {"GET","HEAD"}:
                 if request.headers.get("origin") != settings.origin:
                     return JSONResponse({"error":"Same-origin request required"}, status_code=403, headers=SECURITY)
-                session = request.app.state.service.store.session(request.cookies.get(COOKIE))
+                session = await asyncio.to_thread(request.app.state.service.store.session,request.cookies.get(COOKIE))
+                request.state.identity=session
                 supplied = request.headers.get("x-vaanibench-token", "")
                 if not session or len(supplied)>128 or not secrets.compare_digest(supplied.encode(),session["csrf"].encode()):
                     return JSONResponse({"error":"Session authorization required"}, status_code=403, headers=SECURITY)
@@ -197,14 +234,21 @@ def create_app(settings=None):
 
     @asynccontextmanager
     async def lifespan(app):
-        with instance_lock(settings.state_dir):
+        with ExitStack() as stack:
+            stack.enter_context(instance_lock(settings.state_dir))
+            lease = None
+            if settings.database_url:
+                from .storage import postgres_lease
+                try: lease = stack.enter_context(postgres_lease(settings.database_url))
+                except Exception: raise RuntimeError("Database unavailable or another instance owns the service") from None
             service = HostedService(settings)
+            service.lease = lease
             app.state.service = service
             try: yield
             finally: await asyncio.to_thread(service.close)
 
-    def session(request):
-        value = request.app.state.service.store.session(request.cookies.get(COOKIE))
+    async def session(request):
+        value = getattr(request.state,'identity',None)
         if not value: raise ExecutionDenied("Session expired. Refresh the page.")
         return value
 
@@ -224,21 +268,23 @@ def create_app(settings=None):
 
     async def health(request):
         try:
-            with request.app.state.service.store.db() as db: db.execute("SELECT 1")
+            def probe():
+                with request.app.state.service.store.db() as db: db.execute("SELECT 1")
+            await asyncio.to_thread(probe)
             return JSONResponse({"status":"ok","mode":"owner-live" if settings.live_enabled else "public-mock"})
         except Exception:
             return JSONResponse({"status":"unavailable"},status_code=503)
 
     async def bootstrap(request):
         service = request.app.state.service
-        service.store.cleanup()
+        await asyncio.to_thread(service.store.cleanup)
         token = None
-        identity = service.store.session(request.cookies.get(COOKIE))
-        if not identity: token,identity = service.store.new_session()
+        identity = getattr(request.state,'identity',None)
+        if not identity: token,identity = await asyncio.to_thread(service.store.new_session)
         data = service.catalog.bootstrap()
         owner = identity["role"] == "owner"
         enabled = owner and settings.live_enabled
-        usage = service.store.daily_usage() if owner else None
+        usage = await asyncio.to_thread(service.store.daily_usage) if owner else None
         available = bool(usage and usage["calls"] < settings.daily_calls and Decimal(usage["accounted_usd"]) < settings.daily_usd)
         data.update(token=identity["csrf"], hosted=True, authenticated=owner,
             login_available=bool(settings.owner_password_hash), live_enabled=enabled,
@@ -253,41 +299,83 @@ def create_app(settings=None):
     async def login(request):
         service = request.app.state.service
         if not settings.owner_password_hash: return JSONResponse({"error":"Sign-in unavailable"},status_code=404)
-        identity = session(request)
-        service.store.rate("login:"+identity["owner"],5,300)
-        service.store.rate("global_login",30,900)
+        identity = await session(request)
+        await asyncio.to_thread(service.store.rate,"login:"+identity["owner"],5,300)
+        await asyncio.to_thread(service.store.rate,"global_login",30,900)
         body = await payload(request)
         password = body.get("password") if isinstance(body,dict) else None
         valid = isinstance(password,str) and await asyncio.to_thread(verify_password,password,settings.owner_password_hash)
         if not valid: return JSONResponse({"error":"Sign-in failed"},status_code=401)
-        token,_ = service.store.new_session(role="owner", old_token=request.cookies.get(COOKIE))
+        token,_ = await asyncio.to_thread(service.store.new_session,role="owner", old_token=request.cookies.get(COOKIE))
         return cookie(JSONResponse({"authenticated":True}),token)
 
     async def logout(request):
-        token,_ = request.app.state.service.store.new_session(old_token=request.cookies.get(COOKIE))
+        token,_ = await asyncio.to_thread(request.app.state.service.store.new_session,old_token=request.cookies.get(COOKIE))
         return cookie(JSONResponse({"authenticated":False}),token)
 
     async def start(request):
-        identity = session(request)
+        identity = await session(request)
         selection = DemoRequest.model_validate(await payload(request))
-        job = request.app.state.service.start(selection,identity)
+        key=request.headers.get("idempotency-key")
+        if key is not None and (not 16 <= len(key) <= 128 or not all(c.isalnum() or c in "-_" for c in key)):
+            raise ValueError("Invalid submission key")
+        job = await asyncio.to_thread(request.app.state.service.start,selection,identity,key)
         return JSONResponse({"job_id":job},status_code=202)
 
+    async def cancel(request):
+        identity=await session(request)
+        await asyncio.to_thread(request.app.state.service.store.cancel,request.path_params["job"],identity["owner"])
+        return JSONResponse({"cancellation_requested":True})
+
+    async def history(request):
+        identity=await session(request)
+        if identity["role"] != "owner": raise ExecutionDenied("Owner sign-in required")
+        query=request.query_params.get("q","")
+        status=request.query_params.get("status","")
+        if len(query)>100 or status not in {"","running","completed","failed","cancelled","interrupted"}: raise ValueError("Invalid filter")
+        return JSONResponse({"jobs":await asyncio.to_thread(request.app.state.service.store.history,identity["owner"],query,status)})
+
+    async def historical_compare(request):
+        identity=await session(request)
+        if identity["role"] != "owner": raise ExecutionDenied("Owner sign-in required")
+        body=await payload(request)
+        if not isinstance(body,dict) or set(body)!={"baseline_job","candidate_job","baseline_side","candidate_side"}: raise ValueError("Invalid comparison")
+        from .models import Run
+        from .report import compare,Thresholds
+        runs=[]
+        for side in ["baseline","candidate"]:
+            chosen=body[side+"_side"]
+            if chosen not in {"baseline","candidate"}: raise ValueError("Invalid side")
+            content=await asyncio.to_thread(request.app.state.service.store.artifact,body[side+"_job"],identity["owner"],chosen+"-run.json")
+            runs.append(Run.model_validate_json(content))
+        return JSONResponse(compare(*runs,Thresholds()))
+
+    async def operations(request):
+        identity=await session(request)
+        if identity['role']!='owner': raise ExecutionDenied('Owner sign-in required')
+        from .operations import snapshot
+        thresholds=json.loads((settings.root/'configs/operations-thresholds.json').read_text(encoding='utf-8'))
+        return JSONResponse(await asyncio.to_thread(snapshot,request.app.state.service.store,thresholds))
+
     async def snapshot(request):
-        identity = session(request)
+        identity = await session(request)
         after = int(request.query_params.get("after","0"))
         if not 0 <= after <= 10000: raise ValueError("Invalid cursor")
-        return JSONResponse(request.app.state.service.store.snapshot(request.path_params["job"],identity["owner"],after))
+        return JSONResponse(await asyncio.to_thread(request.app.state.service.store.snapshot,request.path_params["job"],identity["owner"],after))
 
     async def download(request):
-        identity = session(request)
+        identity = await session(request)
         job, name = request.path_params["job"],request.path_params["name"]
-        status = request.app.state.service.store.snapshot(job,identity["owner"])["status"]
+        status = (await asyncio.to_thread(request.app.state.service.store.snapshot,job,identity["owner"]))["status"]
         if status != "completed" or name not in DOWNLOADS: raise KeyError("Unknown artifact")
-        side,filename = DOWNLOADS[name]
-        path = settings.state_dir / "runs" / job / side / filename
-        if not path.is_file(): raise KeyError("Artifact expired")
-        return FileResponse(path,filename=name,media_type="application/octet-stream")
+        try: content=await asyncio.to_thread(request.app.state.service.store.artifact,job,identity["owner"],name)
+        except KeyError:
+            # Existing SQLite jobs from before migration may still have files.
+            side,filename = DOWNLOADS[name]
+            path = settings.state_dir / "runs" / job / side / filename
+            if not path.is_file(): raise KeyError("Artifact expired")
+            content=path.read_text(encoding="utf-8")
+        return Response(content,media_type="application/octet-stream",headers={"Content-Disposition":f'attachment; filename="{name}"'})
 
     async def static(request):
         name = request.path_params.get("name","index.html")
@@ -318,6 +406,9 @@ def create_app(settings=None):
 
     routes = [Route("/healthz",health),Route("/api/bootstrap",bootstrap),Route("/api/login",login,methods=["POST"]),
         Route("/api/logout",logout,methods=["POST"]),Route("/api/runs",start,methods=["POST"]),
+        Route("/api/history",history),Route("/api/compare",historical_compare,methods=["POST"]),
+        Route('/api/operations',operations),
+        Route("/api/jobs/{job}/cancel",cancel,methods=["POST"]),
         Route("/api/jobs/{job}",snapshot),Route("/api/jobs/{job}/download/{name}",download),
         Route("/api/evidence",evidence),Route("/api/evidence/{name}",evidence),Route("/",static),Route("/{name}",static)]
     app = Starlette(routes=routes,lifespan=lifespan,exception_handlers={Exception:error,ValueError:error,KeyError:error,ExecutionDenied:error,RateLimited:error})

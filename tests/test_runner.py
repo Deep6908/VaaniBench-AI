@@ -45,7 +45,8 @@ def test_trace_redaction_and_linkage(execute, tmp_path):
     run = execute()
     content = (tmp_path / "baseline/traces.jsonl").read_text(encoding="utf-8")
     spans = [json.loads(line) for line in content.splitlines()]
-    assert len(spans) == 21
+    assert len(spans) == 41
+    assert sum(s['name']=='generation' for s in spans)==20
     case_spans = [s for s in spans if s["name"] == "case"]
     assert len(case_spans) == 20
     assert all(c.trace_id for c in run.cases)

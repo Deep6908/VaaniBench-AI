@@ -7,13 +7,13 @@ name = "vaanibench"
 version = "0.1.0"
 description = "Reproducible conversational AI evaluation and observability"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2.10,<3", "opentelemetry-sdk>=1.30,<2", "starlette>=0.49,<1", "uvicorn>=0.38,<1"]
+dependencies = ["pydantic>=2.10,<3", "opentelemetry-sdk>=1.30,<2", "starlette>=0.49,<1", "uvicorn>=0.38,<1", "psycopg[binary]>=3.2,<4", "opentelemetry-exporter-otlp-proto-http>=1.30,<2"]
 
 [project.scripts]
 vaanibench = "vaanibench.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.3,<10", "httpx>=0.28,<1", "pyyaml>=6,<7"]
+dev = ["pytest>=8.3,<10", "httpx>=0.28,<1", "pyyaml>=6,<7", "playwright>=1.56,<2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vaanibench"]

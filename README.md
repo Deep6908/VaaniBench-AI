@@ -4,7 +4,7 @@ A CLI-first conversational AI evaluation and observability MVP built with Python
 3.11+, Pydantic, pytest, and OpenTelemetry. It evaluates fixed synthetic
 conversations, compares configurations, and enforces deterministic regressions.
 
-**Status:** local demo plus a tested Render-ready hosted adapter. Groq generation/judging and a small
+**Status:** public mock demo deployed at https://vaanibench-ai.onrender.com. Groq generation/judging and a small
 real A/B run have been executed; OpenAI is implemented but its account smoke test
 returned quota exhaustion. No production deployment or child-safety claim.
 
@@ -16,12 +16,19 @@ mock-only, with no provider keys. It includes secure sessions, session-owned
 results/downloads, throttling, bounded background jobs, a health endpoint, and
 read-only recorded Groq evidence. The existing dark interface is reused.
 
-Optional owner-only live hosting requires a password hash and verified persistent
-storage configuration. Its SQLite daily ledger survives restarts and covers both
+Optional owner-only live hosting requires a password hash and durable storage:
+external PostgreSQL (compatible with ephemeral web hosting), or a persistent
+SQLite disk. The daily ledger survives restarts and covers both
 configurations, judges, and retries. Defaults are $0.50 estimated and 50 attempts
 per UTC day, in addition to existing per-run limits. Free Render storage is
-ephemeral, so live hosting is blocked there. Prepared/tested is not a claim that
-an actual Render service has already been deployed.
+ephemeral; use external PostgreSQL there. The public deployment remains mock-only;
+the new PostgreSQL workflow requires external configuration before cloud verification.
+
+Local additions include restart-safe report downloads, cancellation, idempotent
+submissions, owner history/comparison, remote OTLP tracing, a separate 60-case
+unreviewed draft dataset, human agreement tooling, and approval-gated repeated
+benchmarks. See [reliability setup and demo](docs/reliability.md),
+[evaluation protocol](docs/evaluation-protocol.md), and [progress](docs/progress.md).
 
 ## Present it live
 
@@ -208,8 +215,9 @@ regression; this is not evidence that any real LLM improved.
 
 Fresh-environment installation and tests have been checked locally on Python 3.13
 using cached locked dependencies; Python 3.11/3.13 are also covered by passing
-remote CI. LLM judging has no human calibration. Hosted tracing, speech,
-production service operation and a verified public deployment remain pending. Persistent run.json is
+remote CI for the deployed MVP. LLM judging has no human calibration. Remote OTLP
+export is opt-in; real collector delivery and owner-live cloud operation remain
+unverified. Speech and dynamic conversation simulation remain future work. Persistent run.json is
 written at completion; an interrupted process may leave only partial traces.
 No claims of production readiness, child safety, language-wide quality, model
 improvement, or cost savings are supported by this MVP.

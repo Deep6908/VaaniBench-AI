@@ -2,7 +2,7 @@
 import argparse
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 
 def main():
@@ -92,6 +92,28 @@ def main():
             page.locator("#submit-login").click()
             page.get_by_text("Owner session",exact=True).wait_for()
             assert page.locator("#owner-password").input_value()==""
+            page.locator('#history-panel > summary').click()
+            page.locator('#preset-repeat').click()
+            page.locator('#run').click()
+            page.get_by_text('Results saved',exact=True).wait_for()
+            page.locator('#history-refresh').click()
+            page.locator('#history-list button').first.wait_for()
+            page.locator('#history-search').fill('mock-baseline')
+            page.locator('#history-refresh').click()
+            page.locator('#history-list button').first.click()
+            assert page.locator('#decision').inner_text()=='Pass'
+            page.locator('#history-compare').click()
+            expect(page.locator('#history-comparison')).to_contain_text('Pass')
+            with page.expect_download() as saved_download:
+                page.locator('#downloads a').filter(has_text='comparison.json').click()
+            assert saved_download.value.suggested_filename=='comparison.json'
+            page.locator('#run').click()
+            page.locator('#cancel-run:not([hidden])').click()
+            page.get_by_text('Attention required',exact=True).wait_for()
+            assert page.locator('#error').is_visible()
+            page.locator('#history-status').select_option('cancelled')
+            page.locator('#history-refresh').click()
+            expect(page.locator('#history-list')).to_contain_text('cancelled')
             page.locator("#owner-auth").click()
             page.get_by_text("Public demo",exact=True).wait_for()
         if args.check_live_controls:

@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+from decimal import DecimalException
 from pathlib import Path
 
 from .models import Experiment
@@ -15,6 +16,31 @@ from .credentials import load_api_key_file
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="vaanibench")
     commands = parser.add_subparsers(dest="command", required=True)
+    benchmark=commands.add_parser("benchmark",help="Plan first; explicitly approve an aggregate-budgeted repeated A/B run")
+    benchmark.add_argument('--dataset',type=Path,default=Path('data/scenarios.jsonl'))
+    benchmark.add_argument('--manifest',type=Path,default=Path('data/manifest.json'))
+    benchmark.add_argument('--baseline',type=Path,required=True)
+    benchmark.add_argument('--candidate',type=Path,required=True)
+    benchmark.add_argument('--case-ids',nargs='+',required=True)
+    benchmark.add_argument('--repeats',type=int,default=2)
+    benchmark.add_argument('--max-usd',default='0.10')
+    benchmark.add_argument('--max-calls',type=int,default=20)
+    benchmark.add_argument('--execute',action='store_true')
+    benchmark.add_argument('--approve-plan')
+    benchmark.add_argument('--live',action='store_true')
+    benchmark.add_argument('--env-file',type=Path)
+    benchmark.add_argument('--out',type=Path)
+    annotate=commands.add_parser('annotate',help='Prepare blinded human review templates; no labels are generated')
+    annotate.add_argument('--dataset',type=Path,required=True)
+    annotate.add_argument('--manifest',type=Path,required=True)
+    annotate.add_argument('--registry',type=Path,required=True)
+    annotate.add_argument('--runs',nargs='+',type=Path,required=True)
+    annotate.add_argument('--out',type=Path,required=True)
+    calibration=commands.add_parser('calibration',help='Measure agreement from independent human ratings')
+    calibration.add_argument('--samples',type=Path,required=True)
+    calibration.add_argument('--labels',nargs='+',type=Path,required=True)
+    calibration.add_argument('--split',choices=['calibration','heldout'],default='heldout')
+    calibration.add_argument('--out',type=Path,required=True)
     demo = commands.add_parser("demo", help="Start the loopback-only presentation app")
     demo.add_argument("--port", type=int, default=8765)
     demo.add_argument("--allow-live", action="store_true")
@@ -42,7 +68,27 @@ def main(argv=None) -> int:
     report.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == "validate":
+        if args.command=='benchmark':
+            from decimal import Decimal
+            from .benchmark import plan,execute_plan
+            proposal=plan(args.dataset,args.manifest,args.baseline,args.candidate,args.case_ids,args.repeats,Decimal(args.max_usd),args.max_calls)
+            if args.execute:
+                if not args.out: raise ValueError('Output required')
+                if args.env_file: load_api_key_file(args.env_file)
+                result=execute_plan(proposal,args.dataset,args.manifest,args.out,allow_live=args.live,approval=args.approve_plan)
+                print(json.dumps(result))
+                if any(r['summary']['errors'] or r['summary']['skipped'] or r['summary']['judge_errors'] or r['summary']['stop_reason'] for r in result['runs']): return 1
+            else: print(json.dumps(proposal,indent=2))
+        elif args.command=='annotate':
+            from .calibration import annotation_pack
+            print(json.dumps(annotation_pack(args.dataset,args.manifest,args.registry,args.runs,args.out)))
+        elif args.command=='calibration':
+            from .calibration import agreement
+            result=agreement(args.samples,args.labels,split=args.split)
+            args.out.parent.mkdir(parents=True,exist_ok=True)
+            args.out.write_text(json.dumps(result,indent=2),encoding='utf-8')
+            print(json.dumps(result))
+        elif args.command == "validate":
             cases, manifest = validate_dataset(args.dataset, args.manifest)
             print(json.dumps(dict(valid_cases=len(cases), dataset_version=manifest.dataset_version,
                                   sha256=manifest.sha256)))
@@ -88,7 +134,7 @@ def main(argv=None) -> int:
     except DatasetError as exc:
         print(f"Dataset validation failed: {exc}")
         return 1
-    except (ValueError, OSError):
+    except (ValueError, OSError, DecimalException):
         # Do not echo arbitrary provider/file data through a validation traceback.
         print("Command failed. Check input paths, configuration, dataset validation, and local credentials.")
         return 1

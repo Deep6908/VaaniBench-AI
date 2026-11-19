@@ -2,7 +2,9 @@
 
 Status: implemented CLI-first MVP. See README.md for executed results and limits.
 The demonstration frontend now has a separate hosted adapter and Render Blueprint.
-Actual public deployment is not yet verified. The rubric judge is optional
+Public mock deployment was verified at https://vaanibench-ai.onrender.com. New
+durability extensions are included in this release; owner-live cloud configuration
+and acceptance remain pending. The rubric judge is optional
 and uncalibrated; human calibration remains later work.
 
 ## Data flow
@@ -22,8 +24,8 @@ flowchart LR
 
 The Python CLI is the system of record. The local demo calls the same runner,
 receives progress callbacks, and serves artifacts without exposing a public
-endpoint for spending API credits. Start
-without a database, queue, orchestration framework, or live chat service.
+endpoint for spending API credits. The hosted adapter uses SQLite locally or
+external PostgreSQL. No distributed queue or live chat service is introduced.
 
 ## Module responsibilities
 
@@ -41,7 +43,9 @@ without a database, queue, orchestration framework, or live chat service.
 | demo.py and web/ | Loopback HTTP adapter, bounded comparison jobs, progress and result interface |
 | hosted.py | Starlette/Uvicorn adapter, exact public origin, auth/CSRF boundary, owner-only live jobs |
 | hosted_auth.py | PBKDF2 owner password hashing and verification |
-| hosted_state.py | SQLite sessions/ownership, durable jobs, throttling, retention, daily API reservations |
+| hosted_state.py and storage.py | Shared SQLite/PostgreSQL sessions, ownership, jobs, artifacts, throttling, migrations, daily reservations |
+| benchmark.py and calibration.py | Approval-gated repeated benchmarks, annotation packs, human/judge agreement |
+| operations.py | Owner-only operational snapshot and threshold alerts over retained results |
 
 ## Contracts and boundaries
 
@@ -70,8 +74,8 @@ without a database, queue, orchestration framework, or live chat service.
   or multilingual safety claims. Mock measurements only validate plumbing.
 - Default traces contain IDs, statuses, durations, and metric versions rather
   than prompt/response content or credentials. Export failure must not erase
-  evaluation results. Use OpenTelemetry first; Langfuse integration follows
-  when there is time and a configured destination.
+  evaluation results. Optional OTLP/HTTP export uses a bounded batch processor
+  and sanitized diagnostics. Real collector delivery still needs configuration.
 
 ## Testing and deployment
 
@@ -80,18 +84,27 @@ aggregation denominators, and gate failure. Integration tests run the entire
 offline CLI with temporary files; paid APIs are opt-in and excluded from CI.
 Deterministic mock baselines are distinct from real model baselines.
 
-CI will install locked dependencies, run tests, validate the dataset, execute a
-mock run, and enforce an intentional regression gate. Deployment initially serves
-sanitized precomputed reports with no API keys in the frontend or artifacts.
+CI installs locked dependencies, runs tests, validates the dataset, executes a
+mock run, and enforces an intentional regression gate. PostgreSQL contract and
+mock browser jobs require no provider keys. Public deployment serves interactive
+mock comparisons plus recorded evidence with no keys in frontend/artifacts.
 render.yaml defines a single-instance public mock-only service. Deployment,
 restart, rollback and public smoke checks are documented in deployment.md.
-Live hosting requires owner authentication and confirmed persistent storage;
-attempt reservations are committed atomically before transport. An actual Render
-build and HTTPS check are still required before calling the demo deployed.
+Live hosting requires owner authentication and external PostgreSQL or a confirmed
+persistent SQLite disk. Reservations are committed atomically before transport.
+PostgreSQL transaction advisory locks serialize writes; a dedicated session lease
+allows one hosted instance across ephemeral directories. Transaction pooling is
+unsupported. A lost lease stops subsequent model calls. No uncertain call is replayed.
+Versioned migrations create control/artifact tables without clearing existing data.
+Reports are committed with completion, so downloads survive local scratch loss.
+Old SQLite file-only artifacts use a compatibility fallback. Job history is bounded
+to 100; PostgreSQL retention is seven days, SQLite one hour. Daily reservations
+remain independent of job/report cleanup. See reliability.md for failure limits.
 
 ## Scope after the four-hour MVP
 
 LLM-as-judge needs human labels, held-out calibration, agreement measurements,
 and language-specific disagreement review. It remains experimental until those
-exist. Speech evaluation, additional languages, live-run authentication, persistent
-job storage, and production service operations are later work.
+exist. Annotation/agreement tooling exists; independent labels do not. Dynamic
+simulation and speech remain optional. External owner-live deployment, collector
+verification, restore drills and operational maturity require explicit verification.
