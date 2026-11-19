@@ -10,6 +10,7 @@ import time
 import tempfile
 import base64
 import hashlib
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager, ExitStack
 from dataclasses import dataclass, field
@@ -113,20 +114,54 @@ def instance_lock(directory):
 
 
 class HostedService:
-    def __init__(self, settings):
+    def __init__(self, settings, *, defer_activation=False):
         self.settings = settings
         self.store = StateStore(settings.state_dir, daily_usd=settings.daily_usd, daily_calls=settings.daily_calls,
             database_url=settings.database_url, retention_seconds=7*86400 if settings.database_url else 3600)
-        self.store.auth_revision(hashlib.sha256(settings.owner_password_hash.encode()).hexdigest())
-        self.store.recover()
-        self.store.cleanup()
         self.catalog = DemoController(settings.root, allow_live=settings.live_enabled, pace_seconds=0)
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="evaluation")
         self.stopping = threading.Event()
         self.submission_lock = threading.Lock()
         self.lease = None
+        self.ready = threading.Event()
+        self.leadership_shutdown = threading.Event()
+        self.leadership_thread = None
+        if not defer_activation: self.activate()
+
+    def activate(self):
+        # Recover only after acquiring the singleton lease. A standby instance
+        # must never interrupt the predecessor's jobs or rotate its sessions.
+        self.store.auth_revision(hashlib.sha256(self.settings.owner_password_hash.encode()).hexdigest())
+        self.store.recover()
+        self.store.cleanup()
+        if not self.stopping.is_set(): self.ready.set()
+
+    def await_leadership(self):
+        from .storage import postgres_lease, LeaseBusy
+        def take_over():
+            while not self.stopping.is_set():
+                try:
+                    with postgres_lease(self.settings.database_url) as connection:
+                        if self.stopping.is_set(): return
+                        self.lease=connection
+                        self.activate()
+                        # Hold leadership until evaluation threads have drained,
+                        # not merely until shutdown has been requested.
+                        self.leadership_shutdown.wait()
+                        self.ready.clear()
+                        return
+                except LeaseBusy:
+                    pass
+                except Exception:
+                    self.ready.clear()
+                    logging.getLogger(__name__).warning('Database activation unavailable; retrying without executing evaluations.')
+                if self.stopping.wait(1): return
+        self.leadership_thread=threading.Thread(target=take_over,name='database-handoff',daemon=True)
+        self.leadership_thread.start()
 
     def start(self, selection, session, request_key=None):
+        if not self.ready.is_set():
+            raise RateLimited('Deployment handoff in progress. Try again shortly.')
         with self.submission_lock:
             fingerprint = hashlib.sha256(selection.model_dump_json().encode()).hexdigest()
             existing = self.store.find_submission(session["owner"],request_key,fingerprint)
@@ -174,6 +209,7 @@ class HostedService:
                         self.lease.execute("SELECT 1")
                         self.lease.commit()
                 except Exception:
+                    self.ready.clear()
                     self.stopping.set()
                     return True
             return self.store.cancelled(job)
@@ -194,8 +230,11 @@ class HostedService:
             self.store.finish(job, error="Evaluation failed; no automatic retry was made.")
 
     def close(self):
+        self.ready.clear()
         self.stopping.set()
         self.executor.shutdown(wait=True, cancel_futures=True)
+        self.leadership_shutdown.set()
+        if self.leadership_thread: self.leadership_thread.join()
 
 
 class BoundaryMiddleware(BaseHTTPMiddleware):
@@ -205,6 +244,9 @@ class BoundaryMiddleware(BaseHTTPMiddleware):
             expected = urlsplit(settings.origin).netloc
             if request.headers.get("host", "") != expected:
                 return JSONResponse({"error":"Unrecognized host"}, status_code=400, headers=SECURITY)
+            if request.url.path.startswith('/api/') and not request.app.state.service.ready.is_set():
+                return JSONResponse({'error':'Deployment handoff in progress. The previous instance is draining; please retry shortly.'},
+                    status_code=503,headers=SECURITY | {'Retry-After':'3'})
             if request.method in {"GET","HEAD"} and request.url.path.startswith("/api/"):
                 store = request.app.state.service.store
                 try:
@@ -237,12 +279,18 @@ def create_app(settings=None):
         with ExitStack() as stack:
             stack.enter_context(instance_lock(settings.state_dir))
             lease = None
+            service = HostedService(settings,defer_activation=bool(settings.database_url))
             if settings.database_url:
-                from .storage import postgres_lease
-                try: lease = stack.enter_context(postgres_lease(settings.database_url))
-                except Exception: raise RuntimeError("Database unavailable or another instance owns the service") from None
-            service = HostedService(settings)
-            service.lease = lease
+                from .storage import postgres_lease,LeaseBusy
+                try:
+                    lease = stack.enter_context(postgres_lease(settings.database_url))
+                    service.lease = lease
+                    service.activate()
+                except LeaseBusy:
+                    service.await_leadership()
+                except Exception:
+                    service.close()
+                    raise RuntimeError('Database activation failed; check connection settings and availability') from None
             app.state.service = service
             try: yield
             finally: await asyncio.to_thread(service.close)
@@ -271,7 +319,12 @@ def create_app(settings=None):
             def probe():
                 with request.app.state.service.store.db() as db: db.execute("SELECT 1")
             await asyncio.to_thread(probe)
-            return JSONResponse({"status":"ok","mode":"owner-live" if settings.live_enabled else "public-mock"})
+            service=request.app.state.service
+            # Liveness must pass during standby so Render can route traffic and
+            # retire the predecessor. The API remains 503 until activation.
+            return JSONResponse({"status":"ok","mode":"owner-live" if settings.live_enabled else "public-mock",
+                'execution_ready':service.ready.is_set(),
+                'deployment_state':'active' if service.ready.is_set() else 'draining' if service.stopping.is_set() else 'standby'})
         except Exception:
             return JSONResponse({"status":"unavailable"},status_code=503)
 

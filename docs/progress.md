@@ -36,6 +36,19 @@ still pending. Database credentials remain outside the repository.
 
 ## Historical checkpoints
 
+### Local deployment-handoff regression fix
+
+The owner service exposed a rolling-deployment deadlock: the predecessor held
+the singleton lease while Render waited for the replacement's health check.
+The fix starts replacements in API-blocked standby, activates only after lease
+handoff, and prevents late workers overwriting recovered jobs. Regression tests
+cover overlapping app instances, preserved active jobs/sessions, takeover,
+retained spending and resumed mock execution. Local verification passed: 188
+tests with disposable PostgreSQL enabled, plus browser checks including standby
+bootstrap recovery and the existing mock/owner workflows. This release includes
+the fix; consult GitHub Actions and /healthz execution_ready/deployment_state for
+remote verification. No live model calls or Supabase writes were used in testing.
+
 - [x] Checkpoint 1: strict schema, JSONL loader, version/hash manifest, 20 scenarios.
 - [x] Checkpoint 2: mock provider, runner, deterministic metrics, CLI, results/reports.
 - [x] Checkpoint 3: transport-tested live adapter, optional rubric judge, paired A/B.

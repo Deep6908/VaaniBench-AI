@@ -199,6 +199,8 @@ class StateStore:
         if sum(len(v.encode('utf-8')) for v in (artifacts or {}).values())>5_000_000:
             raise ValueError('Total artifacts too large')
         with self.db(write=True) as db:
+            row=db.execute("SELECT status FROM jobs WHERE id=?",(job,)).fetchone()
+            if not row or row[0]!='running': return
             for name,content in (artifacts or {}).items():
                 if len(content.encode("utf-8")) > 1_000_000: raise ValueError("Artifact too large")
                 db.execute("INSERT INTO artifacts VALUES(?,?,?) ON CONFLICT(job_id,name) DO UPDATE SET content=excluded.content", (job,name,content))

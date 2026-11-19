@@ -200,3 +200,18 @@ def test_api_read_throttling_keeps_health_available(settings):
             db.execute("INSERT INTO rates VALUES(?,?,600,?)",("read:"+identity["owner"],window,(window+1)*60))
         assert client.get("/api/evidence").status_code==429
         assert client.get("/healthz").status_code==200
+
+
+def test_standby_liveness_passes_but_api_cannot_execute(settings):
+    with TestClient(create_app(settings),base_url=settings.origin) as client:
+        data=boot(client)
+        service=client.app.state.service
+        service.ready.clear()
+        health=client.get('/healthz')
+        assert health.status_code==200 and health.json()['deployment_state']=='standby'
+        assert not health.json()['execution_ready']
+        assert client.get('/').status_code==200
+        assert client.get('/api/bootstrap').status_code==503
+        response=client.post('/api/runs',headers=headers(data),json=selection())
+        assert response.status_code==503 and response.headers['retry-after']=='3'
+        assert service.store.history('operator')==[]

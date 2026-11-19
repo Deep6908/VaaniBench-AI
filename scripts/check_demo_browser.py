@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--check-live-controls", action="store_true", help="Inspect live controls without starting a live run")
     parser.add_argument("--check-hosted", action="store_true", help="Check refresh recovery and recorded evidence")
     parser.add_argument("--check-owner-ui", action="store_true", help="Local-only throwaway-password sign-in UI check")
+    parser.add_argument('--check-redeploy',action='store_true',help='Simulate standby bootstrap and check automatic UI recovery')
     parser.add_argument("--out", type=Path, default=Path("artifacts/demo-preview"))
     args = parser.parse_args()
     if args.check_owner_ui:
@@ -23,8 +24,17 @@ def main():
         page = browser.new_page(viewport={"width":1440,"height":1050}, device_scale_factor=1)
         errors=[]
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.route("**/*", lambda route: route.continue_() if route.request.url.startswith(args.url + "/") else route.abort())
+        bootstrap_blocked=[False]
+        def route_request(route):
+            if not route.request.url.startswith(args.url+'/'): return route.abort()
+            if args.check_redeploy and route.request.url.endswith('/api/bootstrap') and not bootstrap_blocked[0]:
+                bootstrap_blocked[0]=True
+                return route.fulfill(status=503,content_type='application/json',body='{"error":"Deployment handoff in progress"}')
+            route.continue_()
+        page.route('**/*',route_request)
         page.goto(args.url,wait_until="networkidle")
+        if args.check_redeploy:
+            expect(page.locator('#error')).to_contain_text('Deployment is finishing')
         page.locator("#run:not([disabled])").wait_for()
         assert page.locator(".preset-icon").first.inner_text() == "↘"
         assert page.locator(".run-arrow").inner_text() == "↗"

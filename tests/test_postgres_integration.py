@@ -7,6 +7,8 @@ import json
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from contextlib import ExitStack
+import time
 from urllib.parse import urlsplit
 
 import pytest
@@ -82,7 +84,42 @@ def test_postgres_owner_jobs_reports_and_budget_survive_new_scratch_directory(pg
         assert owner['authenticated'] and owner['daily_usage']['calls']==2
         assert client.get(f'/api/jobs/{job}/download/baseline-run.json').status_code==200
         assert client.get('/api/history').json()['jobs'][0]['id']==job
-        # Same caps, new scratch directory: no extra transport calls permitted.
         new=client.post('/api/runs',headers=headers(owner),json=body).json()['job_id']
         assert wait(client,new)['result']['runs']['baseline']['cases'][0]['status']=='skipped'
         assert len(calls)==2
+
+
+def test_rolling_deploy_standby_does_not_recover_active_predecessor(pg,tmp_path):
+    old_settings=Settings(ROOT,tmp_path/'old',origin='https://testserver',database_url=URL,
+        owner_password_hash=PASSWORD_HASH,mock_pace_seconds=0)
+    from vaanibench.hosted_auth import password_hash
+    new_settings=Settings(ROOT,tmp_path/'new',origin='https://testserver',database_url=URL,
+        owner_password_hash=password_hash('new deployment owner password'),mock_pace_seconds=0)
+    with ExitStack() as old_stack:
+        old=old_stack.enter_context(TestClient(create_app(old_settings),base_url=old_settings.origin))
+        owner=login(old,boot(old))
+        store=old.app.state.service.store
+        job=store.create_job('operator')
+        store.daily_guard(job).reserve(APIAttempt(number=1,purpose='generation',model='fixture',retry_index=0,
+            reserved_usd=Decimal('.005'),accounted_usd=Decimal('.005')))
+        with TestClient(create_app(new_settings),base_url=new_settings.origin) as replacement:
+            health=replacement.get('/healthz')
+            assert health.status_code==200
+            assert health.json()['deployment_state']=='standby' and not health.json()['execution_ready']
+            assert replacement.get('/api/bootstrap').status_code==503
+            assert replacement.post('/api/runs',headers=headers(owner),json=selection()).status_code==503
+            assert replacement.get('/api/history').status_code==503
+            assert store.snapshot(job,'operator')['status']=='running'
+            assert boot(old)['authenticated']  # standby has not rotated owner credentials
+            old_stack.close()  # Render retires the predecessor after the new health check passes
+            for _ in range(100):
+                if replacement.app.state.service.ready.is_set(): break
+                time.sleep(.05)
+            assert replacement.get('/healthz').json()['deployment_state']=='active'
+            current=replacement.app.state.service.store
+            assert current.snapshot(job,'operator')['status']=='interrupted'
+            assert current.daily_usage()['accounted_usd']=='0.005'
+            visitor=boot(replacement)
+            submitted=replacement.post('/api/runs',headers=headers(visitor),json=selection())
+            assert submitted.status_code==202
+            assert wait(replacement,submitted.json()['job_id'])['status']=='completed'

@@ -147,3 +147,12 @@ def test_existing_session_can_rotate_when_visitor_capacity_is_full(tmp_path):
     new,identity=store.new_session(role="owner",old_token=token)
     assert identity["role"]=="owner" and store.session(token) is None
     assert store.session(new) is not None
+
+
+def test_stale_worker_cannot_overwrite_recovered_job(tmp_path):
+    store=StateStore(tmp_path)
+    job=store.create_job('operator')
+    store.recover()
+    store.finish(job,result={'late':True},artifacts={'report.md':'stale'})
+    assert store.snapshot(job,'operator')['status']=='interrupted'
+    with pytest.raises(KeyError): store.artifact(job,'operator','report.md')

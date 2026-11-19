@@ -95,4 +95,4 @@ jobs:
             if curl --fail --silent http://127.0.0.1:8771/healthz; then break; fi
             sleep 1
           done
-          uv run --no-sync python scripts/check_demo_browser.py --url http://127.0.0.1:8771 --check-hosted --check-owner-ui
+          uv run --no-sync python scripts/check_demo_browser.py --url http://127.0.0.1:8771 --check-hosted --check-owner-ui --check-redeploy

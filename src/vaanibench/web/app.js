@@ -6,7 +6,7 @@ const busyControls = ['mode','baseline','candidate','confirm-live','reset-cases'
 const element = (tag, text, cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
 const score = c => { const values = (c?.metrics || []).filter(m => m.score !== null).map(m => m.score); return c?.status === 'ok' && values.length ? values.reduce((a,b) => a+b,0)/values.length : null; };
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function request(url, options) { const response = await fetch(url, options); const value = await response.json(); if (!response.ok) throw new Error(value.error || 'Request failed'); return value; }
+async function request(url, options) { const response = await fetch(url, options); const value = await response.json(); if (!response.ok) throw Object.assign(new Error(value.error || 'Request failed'),{status:response.status}); return value; }
 function error(message) { $('error').textContent = message || ''; $('error').hidden = !message; }
 function refreshControls() {
   $('cancel-run').hidden = !data.hosted || !running || !jobId;
@@ -235,6 +235,9 @@ async function init() {
       } catch(e) { sessionStorage.removeItem('vaanibench_active_job'); error('Could not resume: '+e.message); }
       finally { running=false; busyControls.forEach(id=>$(id).disabled=false); renderSelection(); refreshControls(); }
     }
-  } catch (e) { error('Cannot load the local demo. '+e.message); }
+  } catch (e) {
+    error(e.status===503 ? 'Deployment is finishing. Waiting for the previous instance to stop; retrying automatically…' : 'Cannot load the demo. '+e.message);
+    if(e.status===503) setTimeout(init,3000);
+  }
 }
 init();

@@ -6,6 +6,10 @@ parameters; the question-mark conversion is never applied to user input.
 from contextlib import contextmanager
 
 
+class LeaseBusy(RuntimeError):
+    """A healthy predecessor may still be draining during a rolling deploy."""
+
+
 class Row(dict):
     def __getitem__(self, key):
         return tuple(self.values())[key] if isinstance(key, int) else super().__getitem__(key)
@@ -65,7 +69,7 @@ def postgres_lease(url):
         acquired = connection.execute("SELECT pg_try_advisory_lock(857231902) AS acquired").fetchone()["acquired"]
         connection.commit()
         if not acquired:
-            raise RuntimeError("Another hosted instance owns this database")
+            raise LeaseBusy("Another hosted instance owns this database")
         try:
             yield connection
         finally:

@@ -83,8 +83,21 @@ history or reset a production ledger to work around a failure.
 PostgreSQL write transactions take one advisory lock; SQLite uses BEGIN IMMEDIATE.
 Capacity admission, idempotency lookup/insertion, and budget reservations are
 atomic. A dedicated PostgreSQL connection holds the process lease; direct/session
-pooling is required. Losing the lease prevents further model attempts. Startup
-recovery marks unfinished jobs interrupted and never replays uncertain calls.
+pooling is required. Losing the lease prevents further model attempts. During a
+rolling deployment the replacement starts in standby if the predecessor still
+owns the lease. /healthz returns 200 with execution_ready=false and
+deployment_state=standby so Render can switch traffic and retire the predecessor.
+All /api routes return 503 with Retry-After while in standby. The browser retries
+its bootstrap automatically. Only after acquiring the lease does the replacement
+rotate owner sessions if needed, recover interrupted jobs, and enable the API.
+Shutdown retains leadership until evaluation threads drain. Late completions
+cannot overwrite already-recovered jobs. This preserves one evaluation owner
+without requiring the old process to stop before the new HTTP server starts.
+
+Startup recovery marks unfinished jobs interrupted and never replays uncertain
+calls. Database connection failures remain distinct from a busy deployment lease.
+If standby persists well beyond a normal deployment, check for a second service
+using the same database. Keep one configured owner service per database.
 
 The browser sends an idempotency key and retains it if submission delivery is
 uncertain. Repeating that selection returns the same job; a different payload
