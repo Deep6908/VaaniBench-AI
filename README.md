@@ -215,11 +215,11 @@ regression; this is not evidence that any real LLM improved.
 
 Fresh-environment installation and tests have been checked locally on Python 3.13
 using cached locked dependencies; Python 3.11/3.13 are also covered by passing
-
-Owner Release: https://vaanibench-owner.onrender.com/
 remote CI for the deployed MVP. LLM judging has no human calibration. Remote OTLP
 export is opt-in; real collector delivery and owner-live cloud operation remain
 unverified. Speech and dynamic conversation simulation remain future work. Persistent run.json is
 written at completion; an interrupted process may leave only partial traces.
 No claims of production readiness, child safety, language-wide quality, model
 improvement, or cost savings are supported by this MVP.
+
+Owner Release: https://vaanibench-owner.onrender.com/
